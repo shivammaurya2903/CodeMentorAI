@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
         default: endpoint = '/api/review'; break;
       }
 
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(`http://localhost:5500${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, language })

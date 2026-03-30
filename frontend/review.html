@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Review - CodeMentor AI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <a href="index.html"><span class="logo-text">CodeMentor AI</span></a>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#docs">Docs</a></li>
+                <li><a href="review.html">Code Review</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero/App Section -->
+    <section class="app-hero">
+        <div class="container">
+            <div class="app-header">
+                <h1 class="app-title">AI Code Review</h1>
+                <p class="app-subtitle">Upload your code and get instant feedback, bug detection, and refactoring suggestions.</p>
+            </div>
+            
+            <div class="app-container">
+                <!-- Code Input -->
+                <div class="input-section">
+                    <div class="input-header">
+                        <select id="language-select" class="language-select">
+                            <option value="javascript">JavaScript</option>
+                            <option value="python">Python</option>
+                            <option value="java">Java</option>
+                            <option value="typescript">TypeScript</option>
+                            <option value="cpp">C++</option>
+                            <option value="go">Go</option>
+                        </select>
+                        <button id="clear-btn" class="btn-secondary">Clear</button>
+                    </div>
+                    <textarea 
+                        id="code-editor" 
+                        placeholder="Paste your code here...&#10;&#10;Example:&#10;function twoSum(nums, target) {&#10;  // Your code&#10;}"
+                        rows="15"
+                    ></textarea>
+                    <button id="submit-btn" class="cta-primary full-width">Get AI Review</button>
+                </div>
+
+                <!-- Results -->
+                <div id="results" class="results hidden">
+                    <div class="results-header">
+                        <div id="score-badge" class="review-score"></div>
+                        <div class="results-actions">
+                            <button id="copy-feedback" class="btn-secondary">Copy Feedback</button>
+                            <button id="new-review" class="btn-secondary">New Review</button>
+                        </div>
+                    </div>
+                    <div id="result-content" class="result-content"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer (same as index) -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo-text">CodeMentor AI</span>
+                    <p>AI-powered mentorship for every developer.</p>
+                </div>
+                <div class="footer-links">
+                    <div class="link-group">
+                        <h4>Product</h4>
+                        <a href="index.html#features">Features</a>
+                        <a href="index.html#docs">Docs</a>
+                    </div>
+                </div>
+                <div class="footer-social">
+                    <a href="#">GitHub</a>
+                    <a href="#">Twitter</a>
+                    <a href="#">Discord</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 CodeMentor AI. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="review.js"></script>
+</body>
+</html>
+
