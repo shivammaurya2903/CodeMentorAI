@@ -68,10 +68,11 @@ document.addEventListener('DOMContentLoaded', function() {
         default: endpoint = '/api/review'; break;
       }
 
+      const bodyData = currentTab === 'chat' ? { message: code, code, language } : { code, language };
       const response = await fetch(`http://localhost:5500${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language })
+        body: JSON.stringify(bodyData)
       });
 
       if (!response.ok) throw new Error('API error');
@@ -79,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const data = await response.json();
       displayResults(data, currentTab);
     } catch (error) {
-      resultContent.innerHTML = `<div class="error">Error: ${error.message}. Is backend running on port 5000?</div>`;
+      resultContent.innerHTML = `<div class="error">Error: ${error.message}. Is backend running on port 5500?</div>`;
       results.classList.remove('hidden');
     } finally {
       submitBtn.textContent = 'Get AI Feedback';
@@ -94,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     switch (tab) {
       case 'review':
-        scoreBadge.innerHTML = `<span class="badge score">Score: ${data.score || 0}/100</span>`;
+        scoreBadge.innerHTML = `<span class="badge score">Score: ${data?.score || 0}/100</span>`;
         html = `
           <div class="review-summary">${data.summary || 'No summary'}</div>
           <div class="review-issues">
@@ -137,7 +138,9 @@ document.addEventListener('DOMContentLoaded', function() {
     resultContent.innerHTML = html;
   }
 
-  // Utility functions
+  // Utility functions - commented out as HTML buttons missing
+  /*
+  TODO: Add copy-feedback & new-review buttons to HTML to enable these:
   document.getElementById('copy-feedback')?.addEventListener('click', () => {
     const text = resultContent.innerText;
     navigator.clipboard.writeText(text).then(() => {
@@ -153,6 +156,7 @@ document.addEventListener('DOMContentLoaded', function() {
     codeEditor.value = '';
     codeEditor.focus();
   });
+  */
 
   // Auto-resize textarea
   codeEditor.addEventListener('input', function() {

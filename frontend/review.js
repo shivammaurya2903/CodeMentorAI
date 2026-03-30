@@ -10,17 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const newReviewBtn = document.getElementById('new-review');
   const clearBtn = document.getElementById('clear-btn');
 
-  // Navbar scroll effects (reuse from script.js)
-  window.addEventListener('scroll', () => {
-    const navbar = document.querySelector('.navbar');
-    if (window.scrollY > 100) {
-      navbar.style.background = 'rgba(15, 23, 42, 0.98)';
-      navbar.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.3)';
-    } else {
-      navbar.style.background = 'rgba(15, 23, 42, 0.95)';
-      navbar.style.boxShadow = 'none';
-    }
-  });
+  // Navbar scroll effects handled in script.js
 
   // Auto-resize textarea
   codeEditor.addEventListener('input', function() {
@@ -59,6 +49,14 @@ document.addEventListener('DOMContentLoaded', function() {
           <h4>Connection Error</h4>
           <p>${error.message}</p>
           <p>Make sure backend is running on <code>http://localhost:5500</code></p>
+            <details>
+              <summary>How to start backend:</summary>
+              <ol>
+                <li>Add backend/.env with OPENAI_API_KEY=sk-...</li>
+                <li>cd backend</li>
+                <li>npm start</li>
+              </ol>
+            </details>
         </div>
       `;
       results.classList.remove('hidden');
@@ -70,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function displayResults(data) {
     results.classList.remove('hidden');
-    results.scrollIntoView({ behavior: 'smooth' });
+  // results.scrollIntoView({ behavior: 'smooth' }); // Removed - now inline on right
 
     // Score
     scoreBadge.innerHTML = `<span class="badge score">Score: ${data.score || 'N/A'}/100</span>`;

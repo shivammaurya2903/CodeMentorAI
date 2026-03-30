@@ -37,38 +37,45 @@
                 <p class="app-subtitle">Upload your code and get instant feedback, bug detection, and refactoring suggestions.</p>
             </div>
             
-            <div class="app-container">
-                <!-- Code Input -->
-                <div class="input-section">
-                    <div class="input-header">
-                        <select id="language-select" class="language-select">
-                            <option value="javascript">JavaScript</option>
-                            <option value="python">Python</option>
-                            <option value="java">Java</option>
-                            <option value="typescript">TypeScript</option>
-                            <option value="cpp">C++</option>
-                            <option value="go">Go</option>
-                        </select>
-                        <button id="clear-btn" class="btn-secondary">Clear</button>
+<div class="app-container">
+                <div class="main-layout">
+                    <!-- Code Input (Left Panel) -->
+                    <div class="input-section">
+                        <div class="input-header">
+                            <select id="language-select" class="language-select" aria-label="Select programming language">
+                                <option value="javascript">JavaScript</option>
+                                <option value="python">Python</option>
+                                <option value="java">Java</option>
+                                <option value="typescript">TypeScript</option>
+                                <option value="cpp">C++</option>
+                                <option value="go">Go</option>
+                            </select>
+                            <button id="clear-btn" class="btn-secondary">Clear</button>
+                        </div>
+                        <textarea 
+                            id="code-editor" 
+                            placeholder="Paste your code here...&#10;&#10;Example:&#10;function twoSum(nums, target) {&#10;  // Your code&#10;}"
+                            rows="15"
+                        ></textarea>
+                        <button id="submit-btn" class="cta-primary full-width">Get AI Review</button>
                     </div>
-                    <textarea 
-                        id="code-editor" 
-                        placeholder="Paste your code here...&#10;&#10;Example:&#10;function twoSum(nums, target) {&#10;  // Your code&#10;}"
-                        rows="15"
-                    ></textarea>
-                    <button id="submit-btn" class="cta-primary full-width">Get AI Review</button>
-                </div>
 
-                <!-- Results -->
-                <div id="results" class="results hidden">
-                    <div class="results-header">
-                        <div id="score-badge" class="review-score"></div>
-                        <div class="results-actions">
-                            <button id="copy-feedback" class="btn-secondary">Copy Feedback</button>
-                            <button id="new-review" class="btn-secondary">New Review</button>
+                    <!-- Results (Right Panel) -->
+                    <div id="results" class="results-panel hidden">
+                        <div class="results-header">
+                            <div id="score-badge" class="review-score"></div>
+                            <div class="results-actions">
+                                <button id="copy-feedback" class="btn-secondary">Copy Feedback</button>
+                                <button id="new-review" class="btn-secondary">New Review</button>
+                            </div>
+                        </div>
+                        <div id="result-content" class="result-content">
+                            <div class="results-placeholder">
+                                <h4>AI Review Results</h4>
+                                <p>Submit your code to see the analysis, issues, score, and refactored version here.</p>
+                            </div>
                         </div>
                     </div>
-                    <div id="result-content" class="result-content"></div>
                 </div>
             </div>
         </div>
@@ -96,7 +103,7 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2024 CodeMentor AI. All rights reserved.</p>
+                <p>&copy; 2026 CodeMentor AI. All rights reserved.</p>
             </div>
         </div>
     </footer>

@@ -17,6 +17,20 @@ app.use("/api/analyse", analyseRoute);
 app.use("/api/explain", explainRoute);
 app.use("/api/review", reviewRoute);
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    openaiKeySet: !!process.env.OPENAI_API_KEY 
+  });
+});
+
 app.listen(5500, () => {
   console.log("Server running on http://localhost:5500");
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn("WARNING: OPENAI_API_KEY not set in .env! API calls will fail.");
+  } else {
+    console.log("OpenAI API key configured.");
+  }
 });
