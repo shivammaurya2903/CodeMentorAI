@@ -929,8 +929,18 @@ body {
     min-height: 0;
     max-height: 560px;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto;
     padding-right: 0.25rem;
+}
+
+.result-content::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.result-content::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border-radius: 4px;
 }
 
 .review-summary {
