@@ -28,25 +28,8 @@ async function safeJsonParse(content, fallback) {
       candidates.push(trimmed);
     }
 
-    // Raw JSON blocks - improved to handle nested structures
-    let braceCount = 0;
-    let start = -1;
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '{') {
-        if (braceCount === 0) start = i;
-        braceCount++;
-      } else if (text[i] === '}') {
-        braceCount--;
-        if (braceCount === 0 && start !== -1) {
-          const block = text.substring(start, i + 1);
-          if (block.length > 20) candidates.push(block.trim());
-          start = -1;
-        }
-      }
-    }
-
-    // Dedupe, sort largest first, top 5
-    const unique = [...new Set(candidates)].sort((a, b) => b.length - a.length).slice(0, 5);
+    // Dedupe, sort largest first, top 3
+    const unique = [...new Set(candidates)].sort((a, b) => b.length - a.length).slice(0, 3);
     return unique;
   }
 
@@ -455,58 +438,22 @@ async function safeJsonParse(content, fallback) {
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     try {
-      const cleaned = normalizeJsonCandidate(candidate);
+      // Robust cleaning
+      let cleaned = candidate
+        .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '') // comments
+        .replace(/\s+/g, ' ')
+        .replace(/,\s*([}\]])/g, '$1') // trailing commas
+        .trim();
 
-      // Attempt 1: parse original candidate exactly as returned.
-      let parsed;
-      try {
-        parsed = JSON.parse(candidate);
-      } catch {
-        // Attempt 2: parse normalized candidate.
-        try {
-          parsed = JSON.parse(cleaned);
-        } catch {
-          // Attempt 3: parse first balanced object from original/normalized text.
-          const extractedOriginal = extractFirstBalancedObject(candidate);
-          const extractedCleaned = extractFirstBalancedObject(cleaned);
-          if (extractedOriginal) {
-            try {
-              parsed = JSON.parse(extractedOriginal);
-            } catch {
-              if (!extractedCleaned) {
-                throw new Error('No parseable balanced JSON object found');
-              }
-              parsed = JSON.parse(extractedCleaned);
-            }
-          } else if (extractedCleaned) {
-            parsed = JSON.parse(extractedCleaned);
-          } else {
-            // Attempt 4: if model returned key/value fragment, wrap as object.
-            if (looksLikeObjectFragment(cleaned)) {
-              parsed = JSON.parse(`{${cleaned}}`);
-            } else {
-              throw new Error('No parseable JSON candidate variants found');
-            }
-          }
-        }
-      }
+      const parsed = JSON.parse(cleaned);
 
-      // Validate that it's an object
-      if (typeof parsed !== 'object' || parsed === null) {
-        console.log(`⏭️ Attempt ${i + 1} failed: not an object`);
-        continue;
-      }
-
-      // Check if it has at least some of the expected keys
-      const expectedKeys = Object.keys(fallback);
-      const hasExpectedKey = expectedKeys.some(key => key in parsed);
-      
-      if (hasExpectedKey || expectedKeys.length === 0) {
+      // Quick schema check - must have some expected fields from fallback
+      if (Object.keys(fallback).some(key => parsed.hasOwnProperty(key))) {
         console.log(`✅ Parsed successfully on attempt ${i + 1}`);
-        return { ...fallback, ...parsed };
+        return parsed;
       }
     } catch (e) {
-      console.log(`⏭️ Attempt ${i + 1} failed: ${e.message.substring(0, 60)}`);
+      console.log(`⏭️ Attempt ${i + 1} failed: ${e.message.substring(0, 50)}`);
     }
   }
 
