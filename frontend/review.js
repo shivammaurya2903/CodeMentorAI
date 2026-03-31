@@ -18,8 +18,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
   codeEditor.addEventListener('input', function () {
+    const maxHeight = 460;
     this.style.height = 'auto';
-    this.style.height = this.scrollHeight + 'px';
+    this.style.height = Math.min(this.scrollHeight, maxHeight) + 'px';
+    this.style.overflowY = this.scrollHeight > maxHeight ? 'auto' : 'hidden';
   });
 
   // ==============================
@@ -173,6 +175,7 @@ document.addEventListener('DOMContentLoaded', function () {
       results?.classList.add('hidden');
       codeEditor.value = '';
       codeEditor.style.height = 'auto';
+      codeEditor.style.overflowY = 'auto';
       codeEditor.focus();
     });
   }
@@ -181,6 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
     clearBtn.addEventListener('click', () => {
       codeEditor.value = '';
       codeEditor.style.height = 'auto';
+      codeEditor.style.overflowY = 'auto';
       codeEditor.focus();
     });
   }
