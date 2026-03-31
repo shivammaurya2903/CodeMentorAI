@@ -1,5 +1,5 @@
-document.addEventListener('DOMContentLoaded', function() {
-  // Elements
+document.addEventListener('DOMContentLoaded', function () {
+
   const codeEditor = document.getElementById('code-editor');
   const languageSelect = document.getElementById('language-select');
   const submitBtn = document.getElementById('submit-btn');
@@ -10,56 +10,84 @@ document.addEventListener('DOMContentLoaded', function() {
   const newReviewBtn = document.getElementById('new-review');
   const clearBtn = document.getElementById('clear-btn');
 
-  // Navbar scroll effects handled in script.js
+  
+  if (!codeEditor || !submitBtn || !resultContent) {
+    console.error("❌ Missing required HTML elements");
+    return;
+  }
 
-  // Auto-resize textarea
-  codeEditor.addEventListener('input', function() {
+
+  codeEditor.addEventListener('input', function () {
     this.style.height = 'auto';
     this.style.height = this.scrollHeight + 'px';
   });
 
-  // Submit handler
+  // ==============================
+  // SUBMIT HANDLER
+  // ==============================
   submitBtn.addEventListener('click', async () => {
     const code = codeEditor.value.trim();
-    const language = languageSelect.value;
-    
+    const language = languageSelect?.value || "javascript";
+
     if (!code) {
       alert('Please enter some code');
       codeEditor.focus();
       return;
     }
 
+    // Loading state
     submitBtn.textContent = 'Analyzing...';
     submitBtn.disabled = true;
 
+    resultContent.innerHTML = `
+      <div class="loading">
+        <p>⚡ Analyzing your code with AI...</p>
+      </div>
+    `;
+    results?.classList.remove('hidden');
+
     try {
-      const response = await fetch('http://localhost:5500/api/review', {
+      const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? 'http://localhost:5000' 
+        : window.location.origin;
+      const response = await fetch(`${apiUrl}/api/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, language })
       });
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Server Error: ${response.status}`);
+      }
 
-      const data = await response.json();
+      // Safe JSON parsing
+      const text = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("Invalid JSON:", text);
+        throw new Error("Invalid response from server");
+      }
+
       displayResults(data);
+
     } catch (error) {
-      resultContent.innerHTML = `
-        <div class="error">
-          <h4>Connection Error</h4>
-          <p>${error.message}</p>
-          <p>Make sure backend is running on <code>http://localhost:5500</code></p>
-            <details>
-              <summary>How to start backend:</summary>
-              <ol>
-                <li>Add backend/.env with OPENAI_API_KEY=sk-...</li>
-                <li>cd backend</li>
-                <li>npm start</li>
-              </ol>
-            </details>
-        </div>
-      `;
-      results.classList.remove('hidden');
+      console.error(error);
+
+      const errorMsg = error.message || 'Unknown error occurred';
+      if (resultContent) {
+        resultContent.innerHTML = `
+          <div class="error">
+            <h4>⚠️ Error</h4>
+            <p>${errorMsg}</p>
+            <p>👉 Make sure backend is running and accessible</p>
+          </div>
+        `;
+      }
+      results?.classList.remove('hidden');
+
     } finally {
       submitBtn.textContent = 'Get AI Review';
       submitBtn.disabled = false;
@@ -67,31 +95,48 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   function displayResults(data) {
-    results.classList.remove('hidden');
-  // results.scrollIntoView({ behavior: 'smooth' }); // Removed - now inline on right
+    results?.classList.remove('hidden');
 
     // Score
-    scoreBadge.innerHTML = `<span class="badge score">Score: ${data.score || 'N/A'}/100</span>`;
+    if (scoreBadge) {
+      scoreBadge.innerHTML = `
+        <span class="badge score">
+          Score: ${data.score ?? 'N/A'}/100
+        </span>
+      `;
+    }
 
-    // Results content
-    const issuesHtml = data.issues && data.issues.length ? 
-      data.issues.map(issue => `
+    // Issues
+    const issuesHtml = data.issues?.length
+      ? data.issues.map(issue => `
         <div class="issue-item ${issue.severity || 'info'}">
-          <strong>${issue.type?.toUpperCase() || 'ISSUE'} (${(issue.severity || 'info').toUpperCase()})</strong> 
+          <strong>
+            ${(issue.type || 'Issue').toUpperCase()} 
+            (${(issue.severity || 'info').toUpperCase()})
+          </strong>
           ${issue.line ? ` - Line ${issue.line}` : ''}
-          <p>${issue.description}</p>
-          ${issue.fix ? `<code>${issue.fix}</code>` : ''}
+          <p>${issue.description || issue}</p>
+          ${issue.fix ? `<code>${escapeHtml(issue.fix)}</code>` : ''}
         </div>
-      `).join('') : '<p class="no-issues">No issues found! 🎉 Your code looks great.</p>';
+      `).join('')
+      : `<p class="no-issues">🎉 No issues found! Great job.</p>`;
 
-    const summaryHtml = data.summary ? `<div class="review-summary">${data.summary}</div>` : '';
-    const refactoredHtml = data.refactored_code ? `
-      <div class="refactored-code">
-        <h4>Refactored Code:</h4>
-        <pre><code>${escapeHtml(data.refactored_code)}</code></pre>
-      </div>
-    ` : '';
+    // Summary
+    const summaryHtml = data.summary
+      ? `<div class="review-summary">${data.summary}</div>`
+      : '';
 
+    // Refactored Code
+const refactoredHtml = data.optimized_code || data.refactored_code
+      ? `
+        <div class="refactored-code">
+          <h4>✨ Optimized Code:</h4>
+          <pre><code>${escapeHtml(data.optimized_code || data.refactored_code)}</code></pre>
+        </div>
+      `
+      : '';
+
+    // Final render
     resultContent.innerHTML = `
       ${summaryHtml}
       <div class="review-issues">
@@ -102,36 +147,44 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
   }
 
-  // Event listeners
-  copyBtn.addEventListener('click', async () => {
-    const text = resultContent.innerText;
-    try {
-      await navigator.clipboard.writeText(text);
-      copyBtn.textContent = 'Copied!';
-      copyBtn.style.background = '#10b981';
-      setTimeout(() => {
-        copyBtn.textContent = 'Copy Feedback';
-        copyBtn.style.background = '';
-      }, 2000);
-    } catch (err) {
-      alert('Copy failed');
-    }
-  });
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const text = resultContent.innerText;
 
-  newReviewBtn.addEventListener('click', () => {
-    results.classList.add('hidden');
-    codeEditor.value = '';
-    codeEditor.style.height = 'auto';
-    codeEditor.focus();
-  });
+      try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = 'Copied!';
+        copyBtn.style.background = '#10b981';
 
-  clearBtn.addEventListener('click', () => {
-    codeEditor.value = '';
-    codeEditor.style.height = 'auto';
-    codeEditor.focus();
-  });
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy Feedback';
+          copyBtn.style.background = '';
+        }, 2000);
 
-  // Utility: Escape HTML for safe display
+      } catch {
+        alert('Copy failed');
+      }
+    });
+  }
+
+ 
+  if (newReviewBtn) {
+    newReviewBtn.addEventListener('click', () => {
+      results?.classList.add('hidden');
+      codeEditor.value = '';
+      codeEditor.style.height = 'auto';
+      codeEditor.focus();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      codeEditor.value = '';
+      codeEditor.style.height = 'auto';
+      codeEditor.focus();
+    });
+  }
+
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -141,4 +194,3 @@ document.addEventListener('DOMContentLoaded', function() {
   // Focus editor on load
   codeEditor.focus();
 });
-

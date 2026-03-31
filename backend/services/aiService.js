@@ -42,7 +42,7 @@ ${code || "No code provided"}
 
   try {
     const response = await openai.chat.completions.create({
-      model: "mixtral-8x7b-32768",
+      model: "llama-3.1-8b-instant",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -52,7 +52,12 @@ ${code || "No code provided"}
     const content = response.choices[0].message.content;
     return safeJsonParse(content);
   } catch (error) {
-    console.error("Groq API error:", { message: error.message, status: error.status, response: error.response?.data || error.response });
+    console.error("Groq API error:", JSON.stringify({ 
+      message: error.message, 
+      status: error.status, 
+      timestamp: new Date().toISOString(),
+      response: error.response?.data || error.response 
+    }, null, 2));
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -86,7 +91,7 @@ ${code}
 
   try {
     const response = await openai.chat.completions.create({
-      model: "mixtral-8x7b-32768",
+      model: "llama-3.1-8b-instant",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -96,7 +101,12 @@ ${code}
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { explanation: "Explanation unavailable", key_concepts: [], improvements: "" });
   } catch (error) {
-    console.error("Groq API error:", { message: error.message, status: error.status, response: error.response?.data || error.response });
+    console.error("Groq API error:", JSON.stringify({ 
+      message: error.message, 
+      status: error.status, 
+      timestamp: new Date().toISOString(),
+      response: error.response?.data || error.response 
+    }, null, 2));
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -132,7 +142,7 @@ ${code}
 
   try {
     const response = await openai.chat.completions.create({
-      model: "mixtral-8x7b-32768",
+      model: "llama-3.1-8b-instant",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -142,7 +152,12 @@ ${code}
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { analysis: "Analysis unavailable", fixes: "", fixed_code: code });
   } catch (error) {
-    console.error("Groq API error:", { message: error.message, status: error.status, response: error.response?.data || error.response });
+    console.error("Groq API error:", JSON.stringify({ 
+      message: error.message, 
+      status: error.status, 
+      timestamp: new Date().toISOString(),
+      response: error.response?.data || error.response 
+    }, null, 2));
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -191,7 +206,7 @@ ${code}
 
   try {
     const response = await openai.chat.completions.create({
-      model: "mixtral-8x7b-32768",
+      model: "llama-3.1-8b-instant",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -201,7 +216,12 @@ ${code}
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { score: 0, summary: "Review unavailable", issues: [], improvements: [], reviewed_code: code, refactored_code: code });
   } catch (error) {
-    console.error("Groq API error:", { message: error.message, status: error.status, response: error.response?.data || error.response });
+    console.error("Groq API error:", JSON.stringify({ 
+      message: error.message, 
+      status: error.status, 
+      timestamp: new Date().toISOString(),
+      response: error.response?.data || error.response 
+    }, null, 2));
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }

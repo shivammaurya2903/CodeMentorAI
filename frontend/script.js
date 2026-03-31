@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const results = document.getElementById('results');
   const scoreBadge = document.getElementById('score-badge');
   const resultContent = document.getElementById('result-content');
-  const currentTab = 'review'; // Default to review
+  let currentTab = 'review'; // Default to review
 
   // Tab switching
   tabs.forEach(tab => {
@@ -69,98 +69,125 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       const bodyData = currentTab === 'chat' ? { message: code, code, language } : { code, language };
-      const response = await fetch(`http://localhost:5500${endpoint}`, {
+      const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? 'http://localhost:5000' 
+        : window.location.origin;
+      const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData)
       });
 
-      if (!response.ok) throw new Error('API error');
+      if (!response.ok) throw new Error(`Server Error: ${response.status}`);
 
       const data = await response.json();
       displayResults(data, currentTab);
     } catch (error) {
-      resultContent.innerHTML = `<div class="error">Error: ${error.message}. Is backend running on port 5500?</div>`;
-      results.classList.remove('hidden');
+      const errorMsg = error.message || 'Unknown error occurred';
+      if (resultContent) {
+        resultContent.innerHTML = `<div class="error"><h4>⚠️ Error</h4><p>${errorMsg}</p><p>👉 Make sure backend is running and accessible</p></div>`;
+        results?.classList.remove('hidden');
+      }
     } finally {
       submitBtn.textContent = 'Get AI Feedback';
       submitBtn.disabled = false;
     }
   });
 
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   function displayResults(data, tab) {
-    results.classList.remove('hidden');
+    results?.classList.remove('hidden');
 
     let html = '';
     
     switch (tab) {
       case 'review':
-        scoreBadge.innerHTML = `<span class="badge score">Score: ${data?.score || 0}/100</span>`;
+        if (scoreBadge) {
+          scoreBadge.innerHTML = `<span class="badge score">Score: ${data?.score || 0}/100</span>`;
+        }
         html = `
-          <div class="review-summary">${data.summary || 'No summary'}</div>
+          <div class="review-summary">${escapeHtml(data.summary || 'No summary')}</div>
           <div class="review-issues">
             <h4>Issues Found (${data.issues?.length || 0}):</h4>
             ${data.issues?.map(issue => `
               <div class="issue-item ${issue.severity}">
-                <strong>${issue.type.toUpperCase()} (${issue.severity.toUpperCase()})</strong> - Line ${issue.line || '?'}
-                <p>${issue.description}</p>
-                <code>${issue.fix}</code>
+                <strong>${(issue.type || 'Issue').toUpperCase()} (${(issue.severity || 'info').toUpperCase()})</strong> - Line ${issue.line || '?'}
+                <p>${escapeHtml(issue.description || '')}</p>
+                ${issue.fix ? `<code>${escapeHtml(issue.fix)}</code>` : ''}
               </div>
             `).join('') || '<p>No issues found! 🎉</p>'}
           </div>
-          ${data.refactored_code ? `<div class="refactored-code"><h4>Refactored Code:</h4><pre><code>${data.refactored_code}</code></pre></div>` : ''}
+          ${data.refactored_code ? `<div class="refactored-code"><h4>Refactored Code:</h4><pre><code>${escapeHtml(data.refactored_code)}</code></pre></div>` : ''}
         `;
         break;
       case 'analyse':
         html = `
           <h4>Analysis:</h4>
-          <p>${data.analysis || 'No analysis'}</p>
-          ${data.fixed_code ? `<h4>Fixed Code:</h4><pre><code>${data.fixed_code}</code></pre>` : ''}
+          <p>${escapeHtml(data.analysis || 'No analysis')}</p>
+          ${data.fixed_code ? `<h4>Fixed Code:</h4><pre><code>${escapeHtml(data.fixed_code)}</code></pre>` : ''}
         `;
         break;
       case 'explain':
         html = `
           <h4>Explanation:</h4>
-          <p>${data.explanation || 'No explanation'}</p>
+          <p>${escapeHtml(data.explanation || 'No explanation')}</p>
           <h5>Key Concepts:</h5>
-          <ul>${data.key_concepts?.map(c => `<li>${c}</li>`).join('') || '<li>None</li>'}</ul>
+          <ul>${data.key_concepts?.map(c => `<li>${escapeHtml(c)}</li>`).join('') || '<li>None</li>'}</ul>
         `;
         break;
       case 'chat':
       default:
         html = `
           <h4>AI Response:</h4>
-          <p>${data.reply || 'No response'}</p>
-          ${data.improved_code ? `<h4>Improved Code:</h4><pre><code>${data.improved_code}</code></pre>` : ''}
+          <p>${escapeHtml(data.reply || 'No response')}</p>
+          ${data.improved_code ? `<h4>Improved Code:</h4><pre><code>${escapeHtml(data.improved_code)}</code></pre>` : ''}
         `;
     }
 
-    resultContent.innerHTML = html;
+    if (resultContent) {
+      resultContent.innerHTML = html;
+    }
   }
 
-  // Utility functions - commented out as HTML buttons missing
-  /*
-  TODO: Add copy-feedback & new-review buttons to HTML to enable these:
-  document.getElementById('copy-feedback')?.addEventListener('click', () => {
+  // Copy feedback button
+  document.getElementById('copy-feedback')?.addEventListener('click', async () => {
+    if (!resultContent) return;
     const text = resultContent.innerText;
-    navigator.clipboard.writeText(text).then(() => {
-      const btn = event.target;
-      const original = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => btn.textContent = original, 2000);
-    });
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = document.getElementById('copy-feedback');
+      if (btn) {
+        btn.textContent = 'Copied!';
+        btn.style.background = '#10b981';
+        setTimeout(() => {
+          btn.textContent = 'Copy Feedback';
+          btn.style.background = '';
+        }, 2000);
+      }
+    } catch (err) {
+      alert('Copy failed: ' + err.message);
+    }
   });
 
   document.getElementById('new-review')?.addEventListener('click', () => {
-    results.classList.add('hidden');
-    codeEditor.value = '';
-    codeEditor.focus();
+    results?.classList.add('hidden');
+    if (codeEditor) {
+      codeEditor.value = '';
+      codeEditor.style.height = 'auto';
+      codeEditor.focus();
+    }
   });
-  */
 
   // Auto-resize textarea
-  codeEditor.addEventListener('input', function() {
-    this.style.height = 'auto';
-    this.style.height = this.scrollHeight + 'px';
-  });
+  if (codeEditor) {
+    codeEditor.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = this.scrollHeight + 'px';
+    });
+  }
 });

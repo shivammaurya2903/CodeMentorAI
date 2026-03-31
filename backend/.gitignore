@@ -3,3 +3,6 @@ node_modules/
 .DS_Store
 *.log
 .package-lock.json
+*.env
+.FRONTEND_ACESS_GUIDE.md
+.SETUP_GUIDE.md
