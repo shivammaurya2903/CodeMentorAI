@@ -7,6 +7,10 @@ const openai = new OpenAI({
 });
 
 async function safeJsonParse(content, fallback) {
+  function escapeRegExp(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   function extractJsonCandidates(text) {
     const candidates = [];
 
@@ -18,9 +22,9 @@ async function safeJsonParse(content, fallback) {
     m = text.match(/```\s*\n([\s\S]*?)\n\s*```/i);
     if (m && m[1]) candidates.push(m[1].trim());
 
-    // Full content if JSON-like - try this first as it's most likely
+    // Full content if JSON-like - try this first as it's most likely.
     const trimmed = text.trim();
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    if (trimmed.startsWith('{')) {
       candidates.push(trimmed);
     }
 
@@ -363,6 +367,88 @@ async function safeJsonParse(content, fallback) {
     ).trim();
   }
 
+  function recoverFromExpectedKeys(text, template) {
+    const expectedKeys = Object.keys(template);
+    if (expectedKeys.length === 0) {
+      return null;
+    }
+
+    const keyLocations = [];
+    for (const key of expectedKeys) {
+      const re = new RegExp(`"${escapeRegExp(key)}"\\s*:`, 'g');
+      const match = re.exec(text);
+      if (match) {
+        keyLocations.push({ key, index: match.index, matchLength: match[0].length });
+      }
+    }
+
+    if (keyLocations.length === 0) {
+      return null;
+    }
+
+    keyLocations.sort((a, b) => a.index - b.index);
+    const recovered = {};
+
+    for (let i = 0; i < keyLocations.length; i++) {
+      const current = keyLocations[i];
+      const valueStart = current.index + current.matchLength;
+      const valueEnd = i < keyLocations.length - 1 ? keyLocations[i + 1].index : text.length;
+      let rawValue = text.substring(valueStart, valueEnd).trim();
+
+      if (!rawValue) {
+        continue;
+      }
+
+      rawValue = rawValue.replace(/^[,\s]+/, '').replace(/[\s,]+$/, '').trim();
+      if (!rawValue) {
+        continue;
+      }
+
+      // Remove any trailing object terminator from a sliced segment.
+      rawValue = rawValue.replace(/\}\s*$/, '').trim();
+
+      try {
+        recovered[current.key] = JSON.parse(rawValue);
+        continue;
+      } catch {
+        // Fall through to lenient string extraction.
+      }
+
+      if (rawValue.startsWith('"')) {
+        let valueBody = rawValue.slice(1);
+
+        let closingIndex = -1;
+        let isEscaped = false;
+        for (let j = 0; j < valueBody.length; j++) {
+          const ch = valueBody[j];
+          if (isEscaped) {
+            isEscaped = false;
+            continue;
+          }
+          if (ch === '\\') {
+            isEscaped = true;
+            continue;
+          }
+          if (ch === '"') {
+            closingIndex = j;
+            break;
+          }
+        }
+
+        if (closingIndex >= 0) {
+          valueBody = valueBody.slice(0, closingIndex);
+        }
+
+        valueBody = valueBody.replace(/\\"/g, '"');
+        valueBody = valueBody.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+        valueBody = valueBody.replace(/[\s,]+$/, '');
+        recovered[current.key] = valueBody;
+      }
+    }
+
+    return Object.keys(recovered).length ? { ...template, ...recovered } : null;
+  }
+
   const candidates = extractJsonCandidates(content);
   console.log(`🔍 JSON candidates: ${candidates.length} (content: ${content.length} chars)`);
 
@@ -424,11 +510,51 @@ async function safeJsonParse(content, fallback) {
     }
   }
 
+  // Final recovery path for truncated/malformed model output.
+  const keyRecovered = recoverFromExpectedKeys(content, fallback);
+  if (keyRecovered) {
+    console.warn('⚠️ Parsed using expected-key recovery fallback');
+    return keyRecovered;
+  }
+
   console.error(`❌ All parse attempts (${candidates.length}) failed. Using fallback. Raw sample:`, content.substring(0, 200) + '...');
   return fallback;
 }
 
-// ... (all other functions unchanged, with safeJsonParse(content, fallback) calls - chatWithAI, explainCode, analyseCode, reviewCode as before)
+function isGroqJsonGenerationError(error) {
+  const message = (error && error.message ? String(error.message) : '').toLowerCase();
+  return error && error.status === 400 && message.includes('failed to generate json');
+}
+
+function logGroqError(error) {
+  console.error("Groq API error:", JSON.stringify({
+    message: error.message,
+    status: error.status,
+    timestamp: new Date().toISOString(),
+    failed_generation: error.response?.error?.failed_generation,
+    response: error.response?.data || error.response
+  }, null, 2));
+}
+
+async function createGroqCompletion(messages) {
+  try {
+    return await openai.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      response_format: { type: "json_object" },
+      messages
+    });
+  } catch (error) {
+    if (!isGroqJsonGenerationError(error)) {
+      throw error;
+    }
+
+    console.warn('⚠️ Groq JSON mode failed; retrying without response_format');
+    return openai.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages
+    });
+  }
+}
 
 async function chatWithAI(message, code, language) {
   const systemPrompt = `You are a senior software engineer and mentor.
@@ -456,23 +582,15 @@ ${code || "No code provided"}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { reply: "AI service error", fix: "", improved_code: "" });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -505,23 +623,15 @@ ${code}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { explanation: "Explanation unavailable", key_concepts: [], improvements: "" });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -556,23 +666,15 @@ ${code}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { analysis: "Analysis unavailable", fixes: "", fixed_code: code });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -620,23 +722,15 @@ ${code}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { score: 0, summary: "Review unavailable", issues: [], improvements: [], reviewed_code: code, refactored_code: code });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
