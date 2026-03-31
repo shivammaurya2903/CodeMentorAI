@@ -17,7 +17,7 @@ const corsOptions = {
       'http://127.0.0.1:5000',
       'http://127.0.0.1:5500',
       'https://codementorai-n3b6.onrender.com',
-      'https://ai-codementor.app' // Update with your actual Netlify domain
+      'https://ai-codementor.netlify.app/' // Update with your actual Netlify domain
     ];
     
     // Allow requests with no origin (like mobile apps, file://, or curl requests)
