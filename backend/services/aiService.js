@@ -7,6 +7,10 @@ const openai = new OpenAI({
 });
 
 async function safeJsonParse(content, fallback) {
+  function escapeRegExp(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   function extractJsonCandidates(text) {
     const candidates = [];
 
@@ -18,83 +22,414 @@ async function safeJsonParse(content, fallback) {
     m = text.match(/```\s*\n([\s\S]*?)\n\s*```/i);
     if (m && m[1]) candidates.push(m[1].trim());
 
-    // Find first { and last } to extract JSON block
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      candidates.push(text.substring(firstBrace, lastBrace + 1));
-    }
-
-    // Full content if JSON-like
+    // Full content if JSON-like - try this first as it's most likely.
     const trimmed = text.trim();
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    if (trimmed.startsWith('{')) {
       candidates.push(trimmed);
     }
 
-    // Dedupe, sort largest first
-    const unique = [...new Set(candidates)].sort((a, b) => b.length - a.length);
+    // Dedupe, sort largest first, top 3
+    const unique = [...new Set(candidates)].sort((a, b) => b.length - a.length).slice(0, 3);
     return unique;
   }
 
-  function cleanJsonString(str) {
-    // Remove comments
-    str = str.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
-    
-    // Process character by character to properly escape strings
+  function stripJsonComments(jsonString) {
     let result = '';
     let inString = false;
-    let escaped = false;
-    
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      const nextChar = str[i + 1];
-      
-      if (escaped) {
-        result += char;
-        escaped = false;
-        continue;
-      }
-      
-      if (char === '\\') {
-        result += char;
-        escaped = true;
-        continue;
-      }
-      
-      if (char === '"') {
-        inString = !inString;
-        result += char;
-        continue;
-      }
-      
-      if (inString) {
-        // Inside a string - escape problematic characters
-        if (char === '\n') {
-          result += '\\n';
-        } else if (char === '\r') {
-          result += '\\r';
-        } else if (char === '\t') {
-          result += '\\t';
-        } else if (char === '`') {
-          result += '\\`';
-        } else {
+    let isEscaped = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    for (let i = 0; i < jsonString.length; i++) {
+      const char = jsonString[i];
+      const next = jsonString[i + 1];
+
+      if (inLineComment) {
+        if (char === '\n' || char === '\r') {
+          inLineComment = false;
           result += char;
         }
-      } else {
-        // Outside strings - only keep structural characters and whitespace
-        if (char === '\n' || char === '\r') {
-          // Skip newlines outside strings
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (char === '*' && next === '/') {
+          inBlockComment = false;
+          i++;
+        }
+        continue;
+      }
+
+      if (inString) {
+        result += char;
+        if (isEscaped) {
+          isEscaped = false;
+        } else if (char === '\\') {
+          isEscaped = true;
+        } else if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        result += char;
+        continue;
+      }
+
+      if (char === '/' && next === '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === '/' && next === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+
+      result += char;
+    }
+
+    return result;
+  }
+
+  function convertBacktickValuesToJsonStrings(text) {
+    let result = '';
+    let inDoubleString = false;
+    let isEscaped = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+
+      if (inDoubleString) {
+        result += char;
+        if (isEscaped) {
+          isEscaped = false;
+        } else if (char === '\\') {
+          isEscaped = true;
+        } else if (char === '"') {
+          inDoubleString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inDoubleString = true;
+        result += char;
+        continue;
+      }
+
+      if (char === ':' ) {
+        result += char;
+
+        let j = i + 1;
+        while (j < text.length && /\s/.test(text[j])) {
+          result += text[j];
+          j++;
+        }
+
+        if (text[j] === '`') {
+          j++;
+          let backtickContent = '';
+          let backtickEscaped = false;
+
+          while (j < text.length) {
+            const btChar = text[j];
+            if (backtickEscaped) {
+              backtickContent += btChar;
+              backtickEscaped = false;
+              j++;
+              continue;
+            }
+
+            if (btChar === '\\') {
+              backtickContent += btChar;
+              backtickEscaped = true;
+              j++;
+              continue;
+            }
+
+            if (btChar === '`') {
+              break;
+            }
+
+            backtickContent += btChar;
+            j++;
+          }
+
+          if (j < text.length && text[j] === '`') {
+            result += JSON.stringify(backtickContent);
+            i = j;
+            continue;
+          }
+
+          // No matching closing backtick: keep original text from this point.
+          result += '`' + backtickContent;
+          i = j - 1;
           continue;
         }
+
+        i = j - 1;
+        continue;
+      }
+
+      result += char;
+    }
+
+    return result;
+  }
+
+  function removeTrailingCommas(jsonString) {
+    let result = '';
+    let inString = false;
+    let isEscaped = false;
+
+    for (let i = 0; i < jsonString.length; i++) {
+      const char = jsonString[i];
+
+      if (inString) {
         result += char;
+        if (isEscaped) {
+          isEscaped = false;
+        } else if (char === '\\') {
+          isEscaped = true;
+        } else if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        result += char;
+        continue;
+      }
+
+      if (char === ',') {
+        let j = i + 1;
+        while (j < jsonString.length && /\s/.test(jsonString[j])) {
+          j++;
+        }
+        if (jsonString[j] === '}' || jsonString[j] === ']') {
+          continue;
+        }
+      }
+
+      result += char;
+    }
+
+    return result;
+  }
+
+  function cleanControlCharacters(jsonString) {
+    return jsonString.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ');
+  }
+
+  function escapeInvalidStringControls(jsonString) {
+    let result = '';
+    let inString = false;
+    let isEscaped = false;
+
+    for (let i = 0; i < jsonString.length; i++) {
+      const char = jsonString[i];
+
+      if (!inString) {
+        if (char === '"') {
+          inString = true;
+        }
+        result += char;
+        continue;
+      }
+
+      if (isEscaped) {
+        result += char;
+        isEscaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        result += char;
+        isEscaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = false;
+        result += char;
+        continue;
+      }
+
+      // JSON strings cannot contain raw control characters.
+      if (char === '\n') {
+        result += '\\n';
+        continue;
+      }
+      if (char === '\r') {
+        result += '\\r';
+        continue;
+      }
+      if (char === '\t') {
+        result += '\\t';
+        continue;
+      }
+
+      const code = char.charCodeAt(0);
+      if (code < 32 || code === 127) {
+        result += ' ';
+        continue;
+      }
+
+      result += char;
+    }
+
+    return result;
+  }
+
+  function extractFirstBalancedObject(text) {
+    let inString = false;
+    let isEscaped = false;
+    let braceCount = 0;
+    let start = -1;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+
+      if (inString) {
+        if (isEscaped) {
+          isEscaped = false;
+        } else if (char === '\\') {
+          isEscaped = true;
+        } else if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char === '{') {
+        if (braceCount === 0) {
+          start = i;
+        }
+        braceCount++;
+        continue;
+      }
+
+      if (char === '}') {
+        if (braceCount > 0) {
+          braceCount--;
+          if (braceCount === 0 && start !== -1) {
+            return text.substring(start, i + 1).trim();
+          }
+        }
       }
     }
-    
-    // Remove trailing commas before } and ]
-    result = result.replace(/,\s*([}\]])/g, '$1');
-    
-    result = result.trim();
-    return result;
+
+    return null;
+  }
+
+  function looksLikeObjectFragment(text) {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return false;
+    }
+    return /^"[^"]+"\s*:/.test(trimmed);
+  }
+
+  function normalizeJsonCandidate(input) {
+    return cleanControlCharacters(
+      escapeInvalidStringControls(
+        removeTrailingCommas(stripJsonComments(convertBacktickValuesToJsonStrings(input.trim())))
+      )
+    ).trim();
+  }
+
+  function recoverFromExpectedKeys(text, template) {
+    const expectedKeys = Object.keys(template);
+    if (expectedKeys.length === 0) {
+      return null;
+    }
+
+    const keyLocations = [];
+    for (const key of expectedKeys) {
+      const re = new RegExp(`"${escapeRegExp(key)}"\\s*:`, 'g');
+      const match = re.exec(text);
+      if (match) {
+        keyLocations.push({ key, index: match.index, matchLength: match[0].length });
+      }
+    }
+
+    if (keyLocations.length === 0) {
+      return null;
+    }
+
+    keyLocations.sort((a, b) => a.index - b.index);
+    const recovered = {};
+
+    for (let i = 0; i < keyLocations.length; i++) {
+      const current = keyLocations[i];
+      const valueStart = current.index + current.matchLength;
+      const valueEnd = i < keyLocations.length - 1 ? keyLocations[i + 1].index : text.length;
+      let rawValue = text.substring(valueStart, valueEnd).trim();
+
+      if (!rawValue) {
+        continue;
+      }
+
+      rawValue = rawValue.replace(/^[,\s]+/, '').replace(/[\s,]+$/, '').trim();
+      if (!rawValue) {
+        continue;
+      }
+
+      // Remove any trailing object terminator from a sliced segment.
+      rawValue = rawValue.replace(/\}\s*$/, '').trim();
+
+      try {
+        recovered[current.key] = JSON.parse(rawValue);
+        continue;
+      } catch {
+        // Fall through to lenient string extraction.
+      }
+
+      if (rawValue.startsWith('"')) {
+        let valueBody = rawValue.slice(1);
+
+        let closingIndex = -1;
+        let isEscaped = false;
+        for (let j = 0; j < valueBody.length; j++) {
+          const ch = valueBody[j];
+          if (isEscaped) {
+            isEscaped = false;
+            continue;
+          }
+          if (ch === '\\') {
+            isEscaped = true;
+            continue;
+          }
+          if (ch === '"') {
+            closingIndex = j;
+            break;
+          }
+        }
+
+        if (closingIndex >= 0) {
+          valueBody = valueBody.slice(0, closingIndex);
+        }
+
+        valueBody = valueBody.replace(/\\"/g, '"');
+        valueBody = valueBody.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+        valueBody = valueBody.replace(/[\s,]+$/, '');
+        recovered[current.key] = valueBody;
+      }
+    }
+
+    return Object.keys(recovered).length ? { ...template, ...recovered } : null;
   }
 
   const candidates = extractJsonCandidates(content);
@@ -103,7 +438,13 @@ async function safeJsonParse(content, fallback) {
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     try {
-      const cleaned = cleanJsonString(candidate);
+      // Robust cleaning
+      let cleaned = candidate
+        .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '') // comments
+        .replace(/\s+/g, ' ')
+        .replace(/,\s*([}\]])/g, '$1') // trailing commas
+        .trim();
+
       const parsed = JSON.parse(cleaned);
 
       // Quick schema check - must have some expected fields from fallback
@@ -116,11 +457,51 @@ async function safeJsonParse(content, fallback) {
     }
   }
 
-  console.error(`❌ All parse attempts (${candidates.length}) failed. Raw sample:`, content.substring(0, 200) + '...');
+  // Final recovery path for truncated/malformed model output.
+  const keyRecovered = recoverFromExpectedKeys(content, fallback);
+  if (keyRecovered) {
+    console.warn('⚠️ Parsed using expected-key recovery fallback');
+    return keyRecovered;
+  }
+
+  console.error(`❌ All parse attempts (${candidates.length}) failed. Using fallback. Raw sample:`, content.substring(0, 200) + '...');
   return fallback;
 }
 
-// ... (all other functions unchanged, with safeJsonParse(content, fallback) calls - chatWithAI, explainCode, analyseCode, reviewCode as before)
+function isGroqJsonGenerationError(error) {
+  const message = (error && error.message ? String(error.message) : '').toLowerCase();
+  return error && error.status === 400 && message.includes('failed to generate json');
+}
+
+function logGroqError(error) {
+  console.error("Groq API error:", JSON.stringify({
+    message: error.message,
+    status: error.status,
+    timestamp: new Date().toISOString(),
+    failed_generation: error.response?.error?.failed_generation,
+    response: error.response?.data || error.response
+  }, null, 2));
+}
+
+async function createGroqCompletion(messages) {
+  try {
+    return await openai.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      response_format: { type: "json_object" },
+      messages
+    });
+  } catch (error) {
+    if (!isGroqJsonGenerationError(error)) {
+      throw error;
+    }
+
+    console.warn('⚠️ Groq JSON mode failed; retrying without response_format');
+    return openai.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages
+    });
+  }
+}
 
 async function chatWithAI(message, code, language) {
   const systemPrompt = `You are a senior software engineer and mentor.
@@ -148,23 +529,15 @@ ${code || "No code provided"}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { reply: "AI service error", fix: "", improved_code: "" });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -197,23 +570,15 @@ ${code}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { explanation: "Explanation unavailable", key_concepts: [], improvements: "" });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -248,23 +613,15 @@ ${code}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { analysis: "Analysis unavailable", fixes: "", fixed_code: code });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
@@ -312,23 +669,15 @@ ${code}
 \`\`\``;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-    });
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
 
     const content = response.choices[0].message.content;
     return safeJsonParse(content, { score: 0, summary: "Review unavailable", issues: [], improvements: [], reviewed_code: code, refactored_code: code });
   } catch (error) {
-    console.error("Groq API error:", JSON.stringify({ 
-      message: error.message, 
-      status: error.status, 
-      timestamp: new Date().toISOString(),
-      response: error.response?.data || error.response 
-    }, null, 2));
+    logGroqError(error);
     if (error.status === 401) {
       throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
     }
