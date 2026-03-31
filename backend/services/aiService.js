@@ -18,10 +18,11 @@ async function safeJsonParse(content, fallback) {
     m = text.match(/```\s*\n([\s\S]*?)\n\s*```/i);
     if (m && m[1]) candidates.push(m[1].trim());
 
-    // Raw JSON blocks
-    let blocks = text.match(/\{[\s\S]*?\}/g);
-    if (blocks) {
-      blocks.filter(b => b.length > 20).forEach(b => candidates.push(b.trim()));
+    // Find first { and last } to extract JSON block
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      candidates.push(text.substring(firstBrace, lastBrace + 1));
     }
 
     // Full content if JSON-like
@@ -30,9 +31,70 @@ async function safeJsonParse(content, fallback) {
       candidates.push(trimmed);
     }
 
-    // Dedupe, sort largest first, top 3
-    const unique = [...new Set(candidates)].sort((a, b) => b.length - a.length).slice(0, 3);
+    // Dedupe, sort largest first
+    const unique = [...new Set(candidates)].sort((a, b) => b.length - a.length);
     return unique;
+  }
+
+  function cleanJsonString(str) {
+    // Remove comments
+    str = str.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    
+    // Process character by character to properly escape strings
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const nextChar = str[i + 1];
+      
+      if (escaped) {
+        result += char;
+        escaped = false;
+        continue;
+      }
+      
+      if (char === '\\') {
+        result += char;
+        escaped = true;
+        continue;
+      }
+      
+      if (char === '"') {
+        inString = !inString;
+        result += char;
+        continue;
+      }
+      
+      if (inString) {
+        // Inside a string - escape problematic characters
+        if (char === '\n') {
+          result += '\\n';
+        } else if (char === '\r') {
+          result += '\\r';
+        } else if (char === '\t') {
+          result += '\\t';
+        } else if (char === '`') {
+          result += '\\`';
+        } else {
+          result += char;
+        }
+      } else {
+        // Outside strings - only keep structural characters and whitespace
+        if (char === '\n' || char === '\r') {
+          // Skip newlines outside strings
+          continue;
+        }
+        result += char;
+      }
+    }
+    
+    // Remove trailing commas before } and ]
+    result = result.replace(/,\s*([}\]])/g, '$1');
+    
+    result = result.trim();
+    return result;
   }
 
   const candidates = extractJsonCandidates(content);
@@ -41,13 +103,7 @@ async function safeJsonParse(content, fallback) {
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     try {
-      // Robust cleaning
-      let cleaned = candidate
-        .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '') // comments
-        .replace(/\s+/g, ' ')
-        .replace(/,\s*([}\]])/g, '$1') // trailing commas
-        .trim();
-
+      const cleaned = cleanJsonString(candidate);
       const parsed = JSON.parse(cleaned);
 
       // Quick schema check - must have some expected fields from fallback

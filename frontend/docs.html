@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Documentation - CodeMentor AI</title>
+    <link rel="shortcut icon" href="icon.png" type="image/x-icon">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="docs.css">
     <link rel="stylesheet" href="chat-widget.css">
@@ -47,6 +48,7 @@
                 <ul>
                     <li><a href="#overview">Overview</a></li>
                     <li><a href="#quick-start">Quick Start</a></li>
+                    <li><a href="#chat-ai">Chat with AI</a></li>
                     <li><a href="#features">Features</a></li>
                     <li><a href="#code-review">Code Review Guide</a></li>
                     <li><a href="#api">API Reference</a></li>
@@ -109,6 +111,67 @@
                 </div>
             </section>
 
+            <!-- Chat with AI -->
+            <section id="chat-ai" class="docs-section">
+                <h2>Chat with AI 💬</h2>
+                <p>Real-time conversational AI assistant available on every page. Ask questions, debug code, get explanations, or request refactors instantly.</p>
+                
+                <div class="docs-feature-card highlighted">
+                    <h4>🗨️ Floating Chat Widget</h4>
+                    <p>Click the <strong>💬 button</strong> (bottom-right) to open. Works on all pages including docs.</p>
+                </div>
+
+                <h3>How to Use</h3>
+                <div class="docs-steps">
+                    <div class="docs-step">
+                        <div class="docs-step-number">1</div>
+                        <h4>Open Chat</h4>
+                        <p>Click 💬 button or press shortcut</p>
+                    </div>
+                    <div class="docs-step">
+                        <div class="docs-step-number">2</div>
+                        <h4>Ask Anything</h4>
+                        <p>Paste code, describe issues, or ask questions</p>
+                    </div>
+                    <div class="docs-step">
+                        <div class="docs-step-number">3</div>
+                        <h4>Get Response</h4>
+                        <p>AI responds with fixes, explanations, or advice</p>
+                    </div>
+                </div>
+
+                <h3>Example Prompts</h3>
+                <div class="docs-code">
+                    <pre><code># Debug this function:
+function calc(a, b) {
+  return a + b * c; // c undefined
+}
+
+// Why is this slow?
+for(let i=0; i<1000000; i++) {
+  arr.push(i);
+}
+
+// Refactor for readability
+const userData = JSON.parse(localStorage.getItem('user'));</code></pre>
+                </div>
+
+                <h3>Features</h3>
+                <ul class="docs-list">
+                    <li>📱 Works on all pages (auto-injects)</li>
+                    <li>💾 Chat history saved locally</li>
+                    <li>📋 Copy code fixes with one click</li>
+                    <li>⚡ Real-time responses (<3s)</li>
+                    <li>🔍 Auto-detects code context</li>
+                </ul>
+
+                <div class="docs-alert">
+                    <strong>🔧 Backend Setup:</strong> Requires server running on <code>http://localhost:5000</code> with <code>GROQ_API_KEY</code> in <code>.env</code>.
+                </div>
+
+                <p><strong>API:</strong> <code>POST /api/chat</code> <code>{message: "...", code: "...", language: "..."}</code></p>
+            </section>
+
             <!-- Features -->
             <section id="features" class="docs-section">
                 <h2>Features</h2>
@@ -126,6 +189,11 @@
                             <tr>
                                 <td>AI Code Review</td>
                                 <td>Bug detection, logic improvements</td>
+                                <td><span class="docs-badge badge-supported">✅ Live</span></td>
+                            </tr>
+                            <tr>
+                                <td>AI Chat 💬</td>
+                                <td>Real-time coding assistance</td>
                                 <td><span class="docs-badge badge-supported">✅ Live</span></td>
                             </tr>
                             <tr>
