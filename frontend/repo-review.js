@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const refreshBtn = document.getElementById('refresh-files');
     const backBtn = document.getElementById('back-to-repos');
 
-    let currentRepo = new URLSearchParams(window.location.search).get('repo');
+let currentRepo = new URLSearchParams(window.location.search).get('repo') || localStorage.getItem('selectedRepo');
     let currentFile = null;
     let files = [];
     let fileSearchTerm = '';
@@ -54,12 +54,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         await loadReposViaGitHub();
         return;
     }
-
     repoNameEl.textContent = currentRepo;
     // Load files
     await loadFiles();
 
-    // Event listeners
+// Event listeners
     refreshBtn.addEventListener('click', loadFiles);
     backBtn.addEventListener('click', () => {
         window.location.href = '/index.html';
@@ -73,6 +72,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     sendChatBtn.addEventListener('click', sendChat);
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendChat();
+    });
+
+    // Repo selector listeners
+    closeRepoSelectorBtn?.addEventListener('click', () => {
+        repoSelectorPanel.classList.add('hidden');
     });
 
     async function loadFiles() {
@@ -257,9 +261,10 @@ document.addEventListener('DOMContentLoaded', async function() {
             });
             if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
             const data = await res.json();
+            const content = data.content || 'Empty file';
             
             // Add syntax highlighting
-            const highlighted = highlightCode(data.content || 'Empty file');
+            const highlighted = highlightCode(content);
             codeViewer.innerHTML = `<div class="code-highlight"><pre><code>${highlighted}</code></pre></div>`;
         } catch (err) {
             codeViewer.innerHTML = `<div class="error">Failed to load file: ${escapeHtml(err.message)}</div>`;
@@ -381,10 +386,64 @@ document.addEventListener('DOMContentLoaded', async function() {
         return icons[ext] || '📄';
     }
 
+    async function checkGitHubSession() {
+        try {
+            const res = await fetch(`${apiUrl}/api/github/status`);
+            const status = await res.json();
+            if (!status.connected) {
+                repoNameEl.textContent = 'GitHub not connected';
+                reposListEl.innerHTML = '<div class="error">Please connect GitHub first from the home page</div>';
+                return false;
+            }
+            await loadRepos();
+            return true;
+        } catch (err) {
+            reposListEl.innerHTML = `<div class="error">Session check failed: ${escapeHtml(err.message)}</div>`;
+            return false;
+        }
+    }
+
+    async function loadRepos() {
+        try {
+            reposListEl.innerHTML = '<div class="loading">Loading repositories...</div>';
+            const res = await fetch(`${apiUrl}/api/github/repos`);
+            if (!res.ok) throw new Error(`Repos API error: ${res.status}`);
+            const data = await res.json();
+            const repos = data.repos || data || [];
+            reposListEl.innerHTML = repos.map(repo => `
+                <div class="repo-item" data-repo="${escapeHtml(repo.full_name)}">
+                    <div class="repo-info">
+                        <h5>${escapeHtml(repo.name)}</h5>
+                        <p>${escapeHtml(repo.description || 'No description')}</p>
+                        <span class="repo-lang">${escapeHtml(repo.language || 'Unknown')}</span>
+                        ${repo.private ? '<span class="private">Private</span>' : ''}
+                    </div>
+                    <button class="select-repo-btn">Select Repo</button>
+                </div>
+            `).join('');
+
+            // Add select listeners
+            reposListEl.querySelectorAll('.select-repo-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const repoItem = e.target.closest('.repo-item');
+                    currentRepo = repoItem.dataset.repo;
+                    repoNameEl.textContent = currentRepo;
+                    localStorage.setItem('selectedRepo', currentRepo);
+                    repoSelectorPanel.classList.add('hidden');
+                    loadFiles();
+                });
+            });
+        } catch (err) {
+            reposListEl.innerHTML = `<div class="error">Failed to load repos: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 });
+
+
 

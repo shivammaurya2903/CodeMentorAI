@@ -212,16 +212,30 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 function connectGitHub() {
-  const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? 'http://localhost:5000/auth/github' 
-    : 'https://codementorai-vqp8.onrender.com/auth/github';
-  window.location.href = backendUrl;
+  const apiUrl = getApiUrl();
+window.location.href = `${apiUrl}/api/github/oauth?state=${encodeURIComponent(Date.now().toString())}`;
 }
 
 // GitHub Dashboard Functions (for index.html)
 async function loadGitHubDashboard() {
   const apiUrl = getApiUrl();
+  const urlParams = new URLSearchParams(window.location.search);
+  const oauthError = urlParams.get('oauth_error');
+  if (oauthError) {
+    const errorMsg = decodeURIComponent(oauthError);
+    console.warn('OAuth cancelled:', errorMsg);
+    document.getElementById('github-notice')?.insertAdjacentHTML('beforeend', `<div class="error-banner" style="background: #fee; padding: 1rem; margin: 1rem 0; border-radius: 4px;">⚠️ ${errorMsg}. <a href="#" onclick="connectGitHub()">Try again</a></div>`);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
   try {
+    // Check status first
+    const statusRes = await fetch(`${apiUrl}/api/github/status`);
+    if (!statusRes.ok || !(await statusRes.json()).connected) {
+      showGitHubNotice();
+      return;
+    }
+    
     // Check user
     const userRes = await fetch(`${apiUrl}/api/github/user`);
     if (!userRes.ok) {
@@ -239,8 +253,7 @@ async function loadGitHubDashboard() {
     // Load repos
     const reposRes = await fetch(`${apiUrl}/api/github/repos`);
     if (!reposRes.ok) throw new Error('Failed to load repos');
-    const repos = await reposRes.json();
-    
+    const repos = await reposRes.json().repos || reposRes.json();
     renderRepos(repos);
   } catch (err) {
     console.error('GitHub load error:', err);
