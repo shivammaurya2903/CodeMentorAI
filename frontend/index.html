@@ -18,17 +18,24 @@
             <div class="nav-logo">
                 <span class="logo-text">CodeMentor AI</span>
             </div>
-            <ul class="nav-menu">
-                <li><a href="#features">Features</a></li>
+            <ul id="primary-nav" class="nav-menu">
+                <li><a href="index.html">Dashboard</a></li>
                 <li><a href="docs.html">Docs</a></li>
                 <li><a href="review.html">Code Review</a></li>
                 <li><a href="repo-review.html">Repo Review</a></li>
             </ul>
-            <div class="hamburger">
-                <span></span>
-                <span></span>
-                <span></span>
+            <div id="github-user-card" class="nav-github-user" style="display: none;" aria-live="polite">
+                <img id="user-avatar" class="nav-user-avatar" src="" alt="GitHub Avatar">
+                <div class="nav-github-user-info">
+                    <span id="user-username" class="nav-user-name">Connected</span>
+                    <span id="user-bio" class="nav-user-meta"></span>
+                </div>
             </div>
+            <button class="hamburger" type="button" aria-label="Toggle navigation menu" aria-controls="primary-nav" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </nav>
 
@@ -64,14 +71,6 @@
     <!-- GitHub Dashboard Section -->
     <section id="github-section">
         <div class="container">
-            <div id="github-user-card" class="github-user-card" style="display: none;">
-                <img id="user-avatar" class="user-avatar" src="" alt="GitHub Avatar">
-                <div class="github-user-info">
-                    <h3 id="user-username">Connect GitHub</h3>
-                    <p id="user-bio"></p>
-                </div>
-                <p>✅ Connected and ready to review your repositories</p>
-            </div>
             <div id="repos-container">
                 <h2 class="section-title" id="repos-title" style="display: none;">Your Repositories</h2>
                 <div id="repos-grid" class="repos-grid" style="display: none;"></div>
@@ -228,14 +227,14 @@
                 <div class="testimonial-card">
                     <p>"The GitHub integration is game-changing. PR reviews are now instant."</p>
                     <div class="author">
-                        <span class="author-name">Mike R., CTO</span>
-                        <span class="company">@ScaleUp</span>
+                        <span class="author-name">Shivam Maurya , CSE Student</span>
+                        <span class="company">@University</span>
                     </div>
                 </div>
                 <div class="testimonial-card">
                     <p>"Perfect for students. Helped me ace my coding interviews."</p>
                     <div class="author">
-                        <span class="author-name">Alex L., CS Student</span>
+                        <span class="author-name">Aman Sharma , CSE Student</span>
                         <span class="company">@University</span>
                     </div>
                 </div>
@@ -284,111 +283,78 @@
         </div>
     </footer>
 
+    <script src="navbar.js"></script>
     <script src="github-connection.js"></script>
     <script src="script.js"></script>
     <script src="chat-widget.js"></script>
     <script>
-      // Handle GitHub connection button clicks
-      const connectButtons = [
-        'github-connect-btn',
-        'github-notice-connect-btn',
-        'final-github-connect'
-      ];
+            function updateIndexConnectionBadge() {
+                const hasToken = typeof github?.isConnected === 'function' ? github.isConnected() : false;
+                const heroConnectBtn = document.getElementById('github-connect-btn');
+                const noticeConnectBtn = document.getElementById('github-notice-connect-btn');
+                const finalConnectBtn = document.getElementById('final-github-connect');
+                const repoReviewLink = document.querySelector('.nav-menu a[href="repo-review.html"]');
 
-      connectButtons.forEach(id => {
-        document.getElementById(id)?.addEventListener('click', () => {
-          const token = localStorage.getItem('github_token');
-          console.log('🔗 Connect button clicked, token exists:', !!token);
-          
-          if (token) {
-            console.log('✅ Token found, redirecting to repo-review.html');
-            window.location.href = '/repo-review.html';
-          } else {
-            console.log('🔄 No token, starting OAuth flow');
-            window.location.href = 'http://localhost:5000/auth/github';
-          }
-        });
-      });
-
-      function setConnectionStatus(connected, message) {
-        const card = document.getElementById('github-user-card');
-        const statusText = document.getElementById('user-username');
-        const notice = document.getElementById('github-notice');
-        const reposTitle = document.getElementById('repos-title');
-        const reposGrid = document.getElementById('repos-grid');
-
-        if (connected) {
-          if (card) card.style.display = 'flex';
-          if (statusText) statusText.textContent = message || '✅ GitHub Connected';
-          if (notice) notice.style.display = 'none';
-          if (reposTitle) reposTitle.style.display = 'block';
-          if (reposGrid) reposGrid.style.display = 'grid';
-        } else {
-          if (card) card.style.display = 'none';
-          if (notice) notice.style.display = 'block';
-          if (reposTitle) reposTitle.style.display = 'none';
-          if (reposGrid) reposGrid.style.display = 'none';
-        }
-      }
-
-      async function fetchRepositories() {
-        const token = localStorage.getItem('github_token');
-        if (!token) {
-          setConnectionStatus(false);
-          return;
-        }
-
-        setConnectionStatus(true, '✅ GitHub Connected');
-        // Already connected behavior: redirect to repo-review page
-        window.location.href = '/repo-review.html';
-        return;
-      }
-
-      document.addEventListener('DOMContentLoaded', () => {
-        // Check if user is already connected
-        const storedToken = localStorage.getItem('github_token');
-        if (storedToken) {
-          console.log('✅ Token already in storage, showing connected status');
-          setConnectionStatus(true, '✅ GitHub Connected');
-        } else {
-          setConnectionStatus(false);
-        }
-      });
-              localStorage.removeItem('github_token');
-              setConnectionStatus(false);
-              return;
+                if (hasToken) {
+                    if (heroConnectBtn) {
+                        heroConnectBtn.textContent = '✅ Connected';
+                        heroConnectBtn.title = 'GitHub is connected';
+                        heroConnectBtn.style.background = '#166534';
+                        heroConnectBtn.style.borderColor = '#22c55e';
+                        heroConnectBtn.style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
+                    }
+                    if (noticeConnectBtn) {
+                        noticeConnectBtn.textContent = '✅ GitHub Connected';
+                        noticeConnectBtn.style.background = '#166534';
+                        noticeConnectBtn.style.borderColor = '#22c55e';
+                    }
+                    if (finalConnectBtn) {
+                        finalConnectBtn.textContent = '✅ GitHub Connected';
+                        finalConnectBtn.style.borderColor = '#22c55e';
+                        finalConnectBtn.style.color = '#86efac';
+                    }
+                    if (repoReviewLink) {
+                        repoReviewLink.textContent = 'Repo Review · Connected';
+                        repoReviewLink.title = 'GitHub connected';
+                        repoReviewLink.style.color = '#86efac';
+                    }
+                } else {
+                    if (heroConnectBtn) {
+                        heroConnectBtn.textContent = '🔗 Connect GitHub';
+                        heroConnectBtn.title = 'Connect your GitHub account';
+                        heroConnectBtn.style.background = '';
+                        heroConnectBtn.style.borderColor = '';
+                        heroConnectBtn.style.boxShadow = '';
+                    }
+                    if (noticeConnectBtn) {
+                        noticeConnectBtn.textContent = 'Connect GitHub Now';
+                        noticeConnectBtn.style.background = '';
+                        noticeConnectBtn.style.borderColor = '';
+                    }
+                    if (finalConnectBtn) {
+                        finalConnectBtn.textContent = 'Connect GitHub';
+                        finalConnectBtn.style.borderColor = '';
+                        finalConnectBtn.style.color = '';
+                    }
+                    if (repoReviewLink) {
+                        repoReviewLink.textContent = 'Repo Review';
+                        repoReviewLink.title = 'Open repository review';
+                        repoReviewLink.style.color = '';
+                    }
+                }
             }
-            throw new Error(`${response.status} ${response.statusText}`);
-          }
 
-          const repos = await response.json();
-          console.log('📦 GitHub repos loaded:', repos);
+            document.addEventListener('DOMContentLoaded', async () => {
+                github?.handleOAuthCallback();
+                await github?.refreshStatus();
+                updateIndexConnectionBadge();
 
-          const reposGrid = document.getElementById('repos-grid');
-          if (reposGrid) {
-            reposGrid.innerHTML = repos.length
-              ? repos.map(repo => `<div class="repo-card"><a href="repo-review.html?repo=${encodeURIComponent(repo.full_name)}">${repo.full_name}</a></div>`).join('')
-              : '<div class="empty">No repositories found.</div>';
-            reposGrid.style.display = repos.length ? 'grid' : 'block';
-          }
-
-        } catch (error) {
-          console.error('❌ GitHub repos fetch failed:', error);
-          const reposGrid = document.getElementById('repos-grid');
-          if (reposGrid) reposGrid.innerHTML = `<div class="error">Unable to load repos: ${error.message}</div>`;
-        }
-      }
-
-      document.addEventListener('DOMContentLoaded', () => {
-        // Check if user is already connected
-        const storedToken = localStorage.getItem('github_token');
-        if (storedToken) {
-          console.log('✅ Token already in storage, showing connected status');
-          setConnectionStatus(true, '✅ GitHub Connected');
-        } else {
-          setConnectionStatus(false);
-        }
-      });
+                ['github-connect-btn', 'github-notice-connect-btn', 'final-github-connect'].forEach((id) => {
+                    document.getElementById(id)?.addEventListener('click', () => {
+                        github?.connectGitHub();
+                    });
+                });
+            });
     </script>
 </body>
 </html>

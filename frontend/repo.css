@@ -232,6 +232,66 @@
   flex-shrink: 0;
 }
 
+/* === Repository Selection Cards === */
+.repo-card {
+  position: relative;
+  margin: 0 0 0.9rem;
+  padding: 0.95rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.75), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.28);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.repo-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 12px 24px rgba(30, 64, 175, 0.22);
+}
+
+.repo-card-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 0.93rem;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.repo-card-description {
+  margin: 0.5rem 0 0.8rem;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.select-repo-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 0.62rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(29, 78, 216, 0.92));
+  color: #eff6ff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: 0 8px 16px rgba(30, 64, 175, 0.35);
+}
+
+.select-repo-btn:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px rgba(37, 99, 235, 0.42);
+}
+
+.select-repo-btn:active {
+  transform: translateY(0);
+}
+
 .folder-children {
   max-height: 0;
   overflow: hidden;

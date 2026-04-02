@@ -19,17 +19,17 @@
             <div class="nav-logo">
                 <a href="index.html"><span class="logo-text">CodeMentor AI</span></a>
             </div>
-            <ul class="nav-menu">
+            <ul id="primary-nav" class="nav-menu">
                 <li><a href="index.html#features">Features</a></li>
-                <li><a href="docs.html">Docs</a></li>
+                <li class="active"><a href="docs.html">Docs</a></li>
                 <li><a href="review.html">Code Review</a></li>
                 <li><a href="repo-review.html">Repo Review</a></li>
             </ul>
-            <div class="hamburger">
+            <button class="hamburger" type="button" aria-label="Toggle navigation menu" aria-controls="primary-nav" aria-expanded="false">
                 <span></span>
                 <span></span>
                 <span></span>
-            </div>
+            </button>
         </div>
     </nav>
 
@@ -49,10 +49,13 @@
                 <ul>
                     <li><a href="#overview">Overview</a></li>
                     <li><a href="#quick-start">Quick Start</a></li>
+                    <li><a href="#github-flow">GitHub Flow</a></li>
+                    <li><a href="#config-security">Config & Security</a></li>
                     <li><a href="#chat-ai">Chat with AI</a></li>
                     <li><a href="#features">Features</a></li>
                     <li><a href="#code-review">Code Review Guide</a></li>
                     <li><a href="#api">API Reference</a></li>
+                    <li><a href="#troubleshooting">Troubleshooting</a></li>
                     <li><a href="#faq">FAQ</a></li>
                 </ul>
             </div>
@@ -110,6 +113,61 @@
                         <p>Get instant AI feedback</p>
                     </div>
                 </div>
+            </section>
+
+            <!-- GitHub Flow -->
+            <section id="github-flow" class="docs-section">
+                <h2>GitHub Integration Flow</h2>
+                <p>CodeMentor AI uses a server-side OAuth flow to connect your GitHub account and analyze repository files securely from the backend.</p>
+
+                <h3>Connection Steps</h3>
+                <div class="docs-steps">
+                    <div class="docs-step">
+                        <div class="docs-step-number">1</div>
+                        <h4>Connect</h4>
+                        <p>Click a GitHub connect button on the landing or review pages.</p>
+                    </div>
+                    <div class="docs-step">
+                        <div class="docs-step-number">2</div>
+                        <h4>Authorize</h4>
+                        <p>GitHub prompts for repository access approval.</p>
+                    </div>
+                    <div class="docs-step">
+                        <div class="docs-step-number">3</div>
+                        <h4>Review</h4>
+                        <p>Select repository files and run AI review/analyze directly.</p>
+                    </div>
+                </div>
+
+                <h3>Important Notes</h3>
+                <ul class="docs-list">
+                    <li>✅ Access tokens are maintained on the backend session.</li>
+                    <li>✅ Repository content is fetched through server API routes.</li>
+                    <li>✅ Session status is checked by the frontend before loading repo tools.</li>
+                </ul>
+            </section>
+
+            <!-- Config & Security -->
+            <section id="config-security" class="docs-section">
+                <h2>Configuration & Security</h2>
+                <p>Set these environment variables in <code>backend/.env</code> before starting the backend.</p>
+
+                <div class="docs-code">
+                    <pre><code class="language-bash">GROQ_API_KEY=your_groq_api_key
+PORT=5000
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+GITHUB_CALLBACK_URL=http://localhost:5000/auth/github/callback
+SESSION_SECRET=your_long_random_secret</code></pre>
+                </div>
+
+                <h3>Security Best Practices</h3>
+                <ul class="docs-list">
+                    <li>Never commit real API keys or OAuth secrets to git.</li>
+                    <li>Use a strong, random <code>SESSION_SECRET</code> in production.</li>
+                    <li>Rotate secrets immediately if accidentally exposed.</li>
+                    <li>Use HTTPS and explicit frontend origins in production deployments.</li>
+                </ul>
             </section>
 
             <!-- Chat with AI -->
@@ -282,6 +340,54 @@ Content-Type: application/json
   "improvedCode": "..."
 }</code></pre>
                 </div>
+
+                <h3>Core Endpoints</h3>
+                <div class="docs-code">
+                    <pre><code class="language-bash">POST /api/review
+POST /api/analyse
+POST /api/explain
+POST /api/chat
+GET  /health</code></pre>
+                </div>
+
+                <h3>GitHub Endpoints</h3>
+                <div class="docs-code">
+                    <pre><code class="language-bash">GET  /api/github/oauth
+GET  /api/github/callback
+GET  /api/github/status
+GET  /api/github/user
+GET  /api/github/repos
+GET  /api/github/repo-files?repo=owner/repo
+GET  /api/github/file?repo=owner/repo&path=src/index.js
+POST /api/github/analyze-file</code></pre>
+                </div>
+            </section>
+
+            <!-- Troubleshooting -->
+            <section id="troubleshooting" class="docs-section">
+                <h2>Troubleshooting</h2>
+
+                <h3>Backend does not start</h3>
+                <p>Check that required env vars are present, especially <code>GROQ_API_KEY</code>. Then run backend from the correct folder:</p>
+                <div class="docs-code">
+                    <pre><code class="language-bash">cd backend
+npm install
+npm start</code></pre>
+                </div>
+
+                <h3>GitHub shows "Not Connected"</h3>
+                <ul class="docs-list">
+                    <li>Verify <code>GITHUB_CLIENT_ID</code> and <code>GITHUB_CLIENT_SECRET</code>.</li>
+                    <li>Ensure callback URL in GitHub app matches backend callback route.</li>
+                    <li>Confirm frontend and backend are running on expected local ports.</li>
+                </ul>
+
+                <h3>AI responses fail</h3>
+                <ul class="docs-list">
+                    <li>Validate key format and quota in your Groq account.</li>
+                    <li>Use <code>GET /health</code> to verify backend status and config flags.</li>
+                    <li>Open browser console/network tab to inspect API error details.</li>
+                </ul>
             </section>
 
             <!-- FAQ -->
@@ -327,6 +433,7 @@ Content-Type: application/json
         </div>
     </footer>
 
+    <script src="navbar.js"></script>
     <script>
         // Simple smooth scrolling for docs
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {

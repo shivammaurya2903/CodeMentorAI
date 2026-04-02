@@ -5,77 +5,120 @@
 
 class GitHubConnectionManager {
   constructor() {
+    this.CONNECTION_CACHE_KEY = 'github_connected_cache';
     this.TOKEN_KEY = 'github_token';
-    this.SESSION_KEY = 'github_session_id';
     this.API_URL = this.getApiUrl();
-    this.FRONTEND_URL = this.getFrontendUrl();
+    this.clearLegacyTokenStorage();
+  }
+
+  clearLegacyTokenStorage() {
+    const legacyToken = localStorage.getItem(this.TOKEN_KEY);
+    if (legacyToken) {
+      localStorage.removeItem(this.TOKEN_KEY);
+    }
   }
 
   /**
    * Get backend API URL based on environment
    */
   getApiUrl() {
-    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:5000'
-      : 'https://codementorai-vqp8.onrender.com';
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    const isIpv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local') || isIpv4;
+
+    if (window.location.port === '5000') {
+      return `${protocol}//${host}:5000`;
+    }
+
+    if (isLocalHost) {
+      return `${protocol}//${host}:5000`;
+    }
+
+    return '';
   }
 
   /**
-   * Get frontend URL
-   */
-  getFrontendUrl() {
-    return `${window.location.protocol}//${window.location.hostname}:${window.location.port || (window.location.protocol === 'https:' ? 443 : 80)}`;
-  }
-
-  /**
-   * Check if GitHub token exists in localStorage
+   * Check cached connection state
    */
   isConnected() {
-    const token = localStorage.getItem(this.TOKEN_KEY);
-    return !!token;
+    return localStorage.getItem(this.CONNECTION_CACHE_KEY) === '1';
   }
 
   /**
-   * Get stored GitHub token
+   * Persist connection state cache
    */
-  getToken() {
-    return localStorage.getItem(this.TOKEN_KEY);
+  setConnected(connected) {
+    localStorage.setItem(this.CONNECTION_CACHE_KEY, connected ? '1' : '0');
   }
 
   /**
-   * Save GitHub token to localStorage (called after OAuth callback)
+   * Query backend session status
    */
-  saveToken(token) {
-    if (token) {
-      localStorage.setItem(this.TOKEN_KEY, token);
-      console.log('✅ GitHub token saved to localStorage');
-      return true;
+  async refreshStatus() {
+    try {
+      const res = await fetch(`${this.API_URL}/api/github/status`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        this.setConnected(false);
+        return false;
+      }
+
+      const status = await res.json();
+      const connected = !!status.connected;
+      this.setConnected(connected);
+      return connected;
+    } catch (err) {
+      console.error('Failed to fetch GitHub status:', err);
+      this.setConnected(false);
+      return false;
     }
-    return false;
   }
 
   /**
-   * Clear GitHub token (on logout)
+   * Clear connection cache
    */
   clearToken() {
+    localStorage.removeItem(this.CONNECTION_CACHE_KEY);
     localStorage.removeItem(this.TOKEN_KEY);
-    localStorage.removeItem(this.SESSION_KEY);
-    console.log('🔄 GitHub token cleared');
+    console.log('🔄 GitHub connection cache cleared');
+  }
+
+  setToken(token) {
+    // Tokens are intentionally not persisted in browser storage.
+    if (!token) return;
+  }
+
+  getToken() {
+    return null;
   }
 
   /**
-   * Extract token from URL query params (called from OAuth callback)
+   * Clean callback params and legacy token values from URL
    */
   extractTokenFromUrl() {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
+    const connected = urlParams.get('connected');
+
     if (token) {
-      this.saveToken(token);
+      this.setToken(token);
+      this.setConnected(true);
+      console.log('OAuth token received and cached');
+    }
+
+    if (connected === '1') {
+      this.setConnected(true);
+    }
+
+    if (token || connected === '1') {
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
-      return token;
+      return true;
     }
-    return null;
+
+    return false;
   }
 
   /**
@@ -97,14 +140,14 @@ class GitHubConnectionManager {
     // If user is on review.html but NOT connected → redirect to index
     if (currentPage === 'review' && !isConnected) {
       console.log('⚠️ On review.html but not connected → redirecting to index');
-      window.location.href = `${this.FRONTEND_URL}/index.html`;
+      window.location.href = 'index.html';
       return false;
     }
 
     // If user is on repo-review.html but NOT connected → redirect to index
     if (currentPage === 'repo-review' && !isConnected) {
       console.log('⚠️ On repo-review.html but not connected → redirecting to index');
-      window.location.href = `${this.FRONTEND_URL}/index.html`;
+      window.location.href = 'index.html';
       return false;
     }
 
@@ -122,15 +165,22 @@ class GitHubConnectionManager {
   /**
    * Initiate GitHub OAuth flow
    */
-  connectGitHub() {
-    const storedToken = this.getToken();
-    if (storedToken) {
-      console.log('✅ GitHub token already present, redirecting to repo-review.html');
-      window.location.href = `${this.FRONTEND_URL}/repo-review.html`;
+  async connectGitHub() {
+    console.log('🔗 Starting GitHub OAuth flow');
+    const existingToken = this.getToken();
+    if (existingToken) {
+      console.log('✅ Existing token found, redirecting to repo-review.html');
+      window.location.href = 'repo-review.html';
       return;
     }
 
-    console.log('🔗 Starting GitHub OAuth flow (no token found)');
+    const sessionConnected = await this.refreshStatus();
+    if (sessionConnected) {
+      console.log('✅ Active GitHub session found, redirecting to repo-review.html');
+      window.location.href = 'repo-review.html';
+      return;
+    }
+
     window.location.href = `${this.API_URL}/auth/github`;
   }
 
@@ -140,7 +190,7 @@ class GitHubConnectionManager {
   goToRepoReview() {
     if (this.isConnected()) {
       console.log('🚀 Navigating to repo-review.html');
-      window.location.href = `${this.FRONTEND_URL}/repo-review.html`;
+      window.location.href = 'repo-review.html';
     } else {
       console.warn('⚠️ Not connected, cannot navigate to repo review');
     }
@@ -151,7 +201,7 @@ class GitHubConnectionManager {
    */
   goToHome() {
     console.log('🏠 Navigating to index.html');
-    window.location.href = `${this.FRONTEND_URL}/index.html`;
+    window.location.href = 'index.html';
   }
 
   /**
@@ -159,17 +209,7 @@ class GitHubConnectionManager {
    */
   handleOAuthCallback() {
     console.log('🔄 Handling OAuth callback...');
-    
-    // Extract token from URL
-    const token = this.extractTokenFromUrl();
-    
-    if (token) {
-      console.log('✅ Token extracted from callback URL');
-      return true;
-    } else {
-      console.log('📌 No token in URL (may have been saved already)');
-      return this.isConnected();
-    }
+    return this.extractTokenFromUrl();
   }
 
   /**
@@ -177,11 +217,8 @@ class GitHubConnectionManager {
    */
   logStatus() {
     const connected = this.isConnected();
-    const token = this.getToken();
     console.log('🔐 GitHub Connection Status:', {
       connected,
-      hasToken: !!token,
-      tokenLength: token?.length || 0,
       apiUrl: this.API_URL,
     });
   }
@@ -193,4 +230,5 @@ const github = new GitHubConnectionManager();
 // Auto-handle OAuth callback on page load
 document.addEventListener('DOMContentLoaded', function() {
   github.handleOAuthCallback();
+  github.refreshStatus();
 });

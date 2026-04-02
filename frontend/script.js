@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       const bodyData = currentTab === 'chat' ? { message: code, code, language } : { code, language };
       const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
         ? 'http://localhost:5000' 
-        : 'https://codementorai-vqp8.onrender.com';
+        : '';
       const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -213,7 +213,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 function connectGitHub() {
   const apiUrl = getApiUrl();
-window.location.href = `${apiUrl}/api/github/oauth?state=${encodeURIComponent(Date.now().toString())}`;
+  window.location.href = `${apiUrl}/auth/github`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
 }
 
 // GitHub Dashboard Functions (for index.html)
@@ -224,20 +230,30 @@ async function loadGitHubDashboard() {
   if (oauthError) {
     const errorMsg = decodeURIComponent(oauthError);
     console.warn('OAuth cancelled:', errorMsg);
-    document.getElementById('github-notice')?.insertAdjacentHTML('beforeend', `<div class="error-banner" style="background: #fee; padding: 1rem; margin: 1rem 0; border-radius: 4px;">⚠️ ${errorMsg}. <a href="#" onclick="connectGitHub()">Try again</a></div>`);
+    const notice = document.getElementById('github-notice');
+    if (notice) {
+      notice.insertAdjacentHTML(
+        'beforeend',
+        `<div class="error-banner" style="background: #fee; padding: 1rem; margin: 1rem 0; border-radius: 4px;">⚠️ ${escapeHtml(errorMsg)}. <a href="#" onclick="connectGitHub(); return false;">Try again</a></div>`
+      );
+    }
     window.history.replaceState({}, document.title, window.location.pathname);
     return;
   }
   try {
     // Check status first
-    const statusRes = await fetch(`${apiUrl}/api/github/status`);
+    const statusRes = await fetch(`${apiUrl}/api/github/status`, {
+      credentials: 'include'
+    });
     if (!statusRes.ok || !(await statusRes.json()).connected) {
       showGitHubNotice();
       return;
     }
     
     // Check user
-    const userRes = await fetch(`${apiUrl}/api/github/user`);
+    const userRes = await fetch(`${apiUrl}/api/github/user`, {
+      credentials: 'include'
+    });
     if (!userRes.ok) {
       showGitHubNotice();
       return;
@@ -245,16 +261,28 @@ async function loadGitHubDashboard() {
     const user = await userRes.json();
     
     // Show user card
-    document.getElementById('user-avatar').src = user.avatar_url;
-    document.getElementById('user-username').textContent = user.login || user.username;
-    document.getElementById('user-bio').textContent = user.bio || 'No bio';
-    document.getElementById('github-user-card').style.display = 'block';
+    const userAvatar = document.getElementById('user-avatar');
+    const userName = document.getElementById('user-username');
+    const userBio = document.getElementById('user-bio');
+    const userCard = document.getElementById('github-user-card');
+
+    if (userAvatar) {
+      userAvatar.src = user.avatar_url;
+    }
+    if (userName) {
+      userName.textContent = user.login || user.username || 'GitHub Connected';
+    }
+    if (userBio) {
+      userBio.textContent = user.bio || 'Ready for repository review';
+      userBio.title = user.bio || 'Ready for repository review';
+    }
+    if (userCard) {
+      userCard.style.display = 'inline-flex';
+    }
     
-    // Load repos
-    const reposRes = await fetch(`${apiUrl}/api/github/repos`);
-    if (!reposRes.ok) throw new Error('Failed to load repos');
-    const repos = await reposRes.json().repos || reposRes.json();
-    renderRepos(repos);
+    // Main page only shows connection state. Repo browsing happens in repo-review.html.
+    document.getElementById('github-notice').style.display = 'none';
+    document.getElementById('repos-container').style.display = 'none';
   } catch (err) {
     console.error('GitHub load error:', err);
     showGitHubNotice();
@@ -282,15 +310,35 @@ function openRepoReview(repoName) {
 }
 
 function getApiUrl() {
-  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? 'http://localhost:5000' 
-    : 'https://codementorai-vqp8.onrender.com';
+  const host = window.location.hostname;
+  const protocol = window.location.protocol;
+  const isIpv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local') || isIpv4;
+
+  if (window.location.port === '5000') {
+    return `${protocol}//${host}:5000`;
+  }
+
+  if (isLocalHost) {
+    return `${protocol}//${host}:5000`;
+  }
+
+  return '';
 }
 
 function showGitHubNotice() {
   document.getElementById('github-notice').style.display = 'block';
-  document.getElementById('github-user-card').style.display = 'none';
+  const userCard = document.getElementById('github-user-card');
+  if (userCard) {
+    userCard.style.display = 'none';
+  }
   document.getElementById('repos-container').style.display = 'none';
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
 }
 
 // Auto-poll GitHub status after OAuth (check every 3s for 60s)
