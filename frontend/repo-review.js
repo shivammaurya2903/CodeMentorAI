@@ -157,10 +157,10 @@ document.addEventListener('DOMContentLoaded', async function () {
       }
 
       filesTree.innerHTML = repos.map((repo) => `
-        <div class="repo-card" style="cursor:pointer;padding:.7rem;border:1px solid #ececec;margin-bottom:.5rem;border-radius:6px;">
-          <strong>${escapeHtml(repo.full_name)}</strong><br>
-          <small>${escapeHtml(repo.description || 'No description')}</small><br>
-          <button class="select-repo-btn" data-repo="${escapeHtml(repo.full_name)}" style="margin-top:0.5rem;">Select Repository</button>
+        <div class="repo-card">
+          <div class="repo-card-title">${escapeHtml(repo.full_name)}</div>
+          <p class="repo-card-description">${escapeHtml(repo.description || 'No description provided')}</p>
+          <button class="select-repo-btn" data-repo="${escapeHtml(repo.full_name)}">Select Repository</button>
         </div>
       `).join('');
 
