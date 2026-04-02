@@ -1,8 +1,30 @@
 require("dotenv").config();
+
+// Validate required environment variables
+function validateEnvironment() {
+  const required = ['GROQ_API_KEY', 'SESSION_SECRET'];
+  const optional = ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'];
+  
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    console.error('❌ FATAL: Missing required environment variables:');
+    missing.forEach(key => console.error(`  - ${key}`));
+    process.exit(1);
+  }
+  
+  const missingOptional = optional.filter(key => !process.env[key]);
+  if (missingOptional.length > 0) {
+    console.warn('⚠️ WARNING: Missing optional environment variables:');
+    missingOptional.forEach(key => console.warn(`  - ${key} (GitHub features disabled)`));
+  }
+}
+
+validateEnvironment();
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
+const rateLimit = require("express-rate-limit");
 
 const chatRoute = require("./routes/chat");
 const analyseRoute = require("./routes/analyse");
@@ -13,32 +35,62 @@ const { exchangeCodeForToken } = require("./services/githubService");
 
 const app = express();
 
+const ALLOWED_ORIGINS = [
+  'http://localhost:5000',
+  'http://localhost:5500',
+  'http://127.0.0.1:5000',
+  'http://127.0.0.1:5500'
+];
+
+if (process.env.NODE_ENV === 'production') {
+  ALLOWED_ORIGINS.push(
+    'https://codementorai-n3b6.onrender.com',
+    'https://ai-codementor.netlify.app'
+  );
+}
+
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:5000',
-      'http://localhost:5500',
-      'http://127.0.0.1:5000',
-      'http://127.0.0.1:5500',
-      'https://codementorai-n3b6.onrender.com',
-      'https://ai-codementor.netlify.app/' // Update with your actual Netlify domain
-    ];
+    // In development, allow requests without origin (for testing)
+    // In production, require origin to be in allowed list
+    if (!origin && process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
     
-    // Allow requests with no origin (like mobile apps, file://, or curl requests)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (ALLOWED_ORIGINS.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  maxAge: 86400,
   optionsSuccessStatus: 200
 };
+
 app.use(cors(corsOptions));
-app.use(express.json());
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.'
+});
+
+const strictLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // strict for auth endpoints
+  message: 'Too many auth requests, please try again later.'
+});
+
+app.use(limiter);
+
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ limit: '10kb', extended: true }));
 app.use(cookieParser());
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-session-secret-change-me',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
   cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 1 day
@@ -48,13 +100,19 @@ app.use("/api/chat", chatRoute);
 app.use("/api/analyse", analyseRoute);
 app.use("/api/explain", explainRoute);
 app.use("/api/review", reviewRoute);
-app.use("/api/github", githubRoute);
+app.use("/api/github", strictLimiter, githubRoute);
 
+
+const crypto = require('crypto');
 
 app.get('/auth/github', (req, res) => {
-  const state = req.sessionID;
-  const githubUrl = `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=repo&state=${state}`;
-  res.redirect(githubUrl);
+  const state = crypto.randomBytes(32).toString('hex');
+  req.session.oauthState = state;
+  req.session.save((err) => {
+    if (err) return res.status(500).json({ error: 'Session error' });
+    const githubUrl = `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=repo&state=${state}`;
+    res.redirect(githubUrl);
+  });
 });
 
 
@@ -63,6 +121,12 @@ app.get('/auth/github/callback', async (req, res) => {
   
   const { userTokens } = require('./services/githubService');
   const FRONTEND_URL = 'http://localhost:5500';
+  
+  // Validate state parameter to prevent CSRF
+  if (state !== req.session.oauthState) {
+    console.error('❌ Invalid OAuth state parameter');
+    return res.redirect(`${FRONTEND_URL}/index.html?error=invalid_state`);
+  }
   
   // Handle user cancellation or error from GitHub
   if (error) {
@@ -99,9 +163,8 @@ app.get('/auth/github/callback', async (req, res) => {
 
     console.log('✅ GitHub OAuth successful! Redirecting to repo-review.html with token');
     
-    // Redirect to repo-review page with token for localStorage (success case)
-    const safeToken = encodeURIComponent(tokenData.access_token);
-    res.redirect(`${FRONTEND_URL}/repo-review.html?token=${safeToken}`);
+    // Redirect to repo-review page with token in URL for localStorage storage
+    res.redirect(`${FRONTEND_URL}/repo-review.html?token=${encodeURIComponent(tokenData.access_token)}`);
   } catch (err) {
     console.error('❌ OAuth token exchange failed:', err.message);
     // On error, redirect back to home

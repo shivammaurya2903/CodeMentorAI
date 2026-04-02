@@ -11,12 +11,33 @@ const {
   userTokens,
 } = require('../services/githubService');
 
+const FRONTEND_URL = 'http://localhost:5500/frontend';
+
 const router = express.Router();
+
+// Input validation functions
+function validateRepoName(repo) {
+  const repoRegex = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/;
+  if (!repoRegex.test(repo)) {
+    throw new Error('Invalid repository name format');
+  }
+}
+
+function validateFilePath(filePath) {
+  // Prevent directory traversal attacks
+  if (filePath.includes('..') || filePath.startsWith('/') || filePath.includes('\\')) {
+    throw new Error('Invalid file path');
+  }
+  // Basic length check
+  if (filePath.length > 500) {
+    throw new Error('File path too long');
+  }
+}
 
 // Simple session setup for demo (use Redis/prod in production)
 router.use(cookieParser());
 router.use(session({
-  secret: process.env.SESSION_SECRET || 'your-session-secret-change-me',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
   cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 1 day
@@ -29,52 +50,13 @@ router.get('/oauth', (req, res) => {
   res.redirect(githubUrl);
 });
 
-// GET /api/github/callback - OAuth callback (alternative route)
-// Note: This route can be used if GitHub app is configured for /api/github/callback
-router.get('/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  
-  const { userTokens } = require('../services/githubService');
-  
-  // Error/cancel from GitHub
-  if (error || !code) {
-    console.error('❌ GitHub OAuth cancelled/error:', error || 'no_code');
-    return res.redirect('http://localhost:5500/index.html');
-  }
-
-  try {
-    console.log('🔄 Exchanging code for GitHub token via /api/github/callback...');
-    await exchangeCodeForToken(code, state || req.sessionID);
-    
-    // Get token for localStorage
-    const sessionId = state || req.sessionID;
-    const tokenData = userTokens.get(sessionId);
-    if (!tokenData?.access_token) {
-      throw new Error('Token not found after exchange');
-    }
-    
-    req.session.githubConnected = true;
-    req.session.githubCode = code;
-    req.session.save((err) => {
-      if (err) console.error('Session save error:', err);
-    });
-
-    console.log('✅ GitHub OAuth successful! Redirecting with token');
-    
-    // Redirect with token for localStorage
-    const safeToken = encodeURIComponent(tokenData.access_token);
-    res.redirect(`http://localhost:5500/review.html?token=${safeToken}`);
-  } catch (err) {
-    console.error('❌ OAuth token exchange failed:', err.message);
-    res.redirect('http://localhost:5500/index.html');
-  }
-});
-
 // GET /api/github/repos - List user repos (req.sessionID for auth)
 router.get('/repos', async (req, res) => {
   try {
-    if (!req.session.githubConnected) {
-      return res.status(401).json({ error: 'Connect GitHub first' });
+    const userData = userTokens.get(req.sessionID);
+    if (!userData?.access_token) {
+      req.session.githubConnected = false;
+      return res.status(401).json({ error: 'Session expired, reconnect GitHub' });
     }
     const repos = await getUserRepos(req.sessionID);
     res.json({ repos });
@@ -90,8 +72,11 @@ router.get('/repo-files', async (req, res) => {
   if (!repo) return res.status(400).json({ error: 'repo param required' });
 
   try {
-    if (!req.session.githubConnected) {
-      return res.status(401).json({ error: 'Connect GitHub first' });
+    validateRepoName(repo);
+    const userData = userTokens.get(req.sessionID);
+    if (!userData?.access_token) {
+      req.session.githubConnected = false;
+      return res.status(401).json({ error: 'Session expired, reconnect GitHub' });
     }
     const files = await getRepoFiles(req.sessionID, repo);
     res.json({ files });
@@ -107,8 +92,12 @@ router.get('/file', async (req, res) => {
   if (!repo || !filePath) return res.status(400).json({ error: 'repo and path required' });
 
   try {
-    if (!req.session.githubConnected) {
-      return res.status(401).json({ error: 'Connect GitHub first' });
+    validateRepoName(repo);
+    validateFilePath(filePath);
+    const userData = userTokens.get(req.sessionID);
+    if (!userData?.access_token) {
+      req.session.githubConnected = false;
+      return res.status(401).json({ error: 'Session expired, reconnect GitHub' });
     }
     const content = await getFileContent(req.sessionID, repo, filePath);
     res.json({ content, path: filePath });
@@ -124,8 +113,12 @@ router.post('/analyze-file', async (req, res) => {
   if (!repo || !filePath) return res.status(400).json({ error: 'repo and filePath required' });
 
   try {
-    if (!req.session.githubConnected) {
-      return res.status(401).json({ error: 'Connect GitHub first' });
+    validateRepoName(repo);
+    validateFilePath(filePath);
+    const userData = userTokens.get(req.sessionID);
+    if (!userData?.access_token) {
+      req.session.githubConnected = false;
+      return res.status(401).json({ error: 'Session expired, reconnect GitHub' });
     }
     const content = await getFileContent(req.sessionID, repo, filePath);
     let aiResult;
@@ -152,8 +145,11 @@ router.get('/prs', async (req, res) => {
   if (!repo) return res.status(400).json({ error: 'repo param required' });
 
   try {
-    if (!req.session.githubConnected) {
-      return res.status(401).json({ error: 'Connect GitHub first' });
+    validateRepoName(repo);
+    const userData = userTokens.get(req.sessionID);
+    if (!userData?.access_token) {
+      req.session.githubConnected = false;
+      return res.status(401).json({ error: 'Session expired, reconnect GitHub' });
     }
     const prs = await getPullRequests(req.sessionID, repo, state);
     res.json({ prs });

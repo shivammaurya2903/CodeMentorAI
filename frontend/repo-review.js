@@ -1,17 +1,30 @@
-// Ensure user is connected before showing repo review page
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('oauth_error')) return; // Handle error in handleOAuthCallback
-    github?.smartRedirect('repo-review');
-  });
-} else {
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.has('oauth_error')) return;
-  github?.smartRedirect('repo-review');
-}
-
 document.addEventListener('DOMContentLoaded', async function() {
+    // If token is coming in URL from OAuth callback, handle it first
+    github?.handleOAuthCallback();
+
+    // Check if we have a token now
+    const token = localStorage.getItem('github_token');
+    console.log('🔐 Token check after callback handling:', !!token);
+
+    // Update connection status immediately
+    const connectionStatus = document.getElementById('connection-status');
+    if (connectionStatus) {
+        if (token) {
+            connectionStatus.textContent = '✅ GitHub Connected';
+            connectionStatus.style.color = 'green';
+        } else {
+            connectionStatus.textContent = '❌ Not Connected';
+            connectionStatus.style.color = 'red';
+        }
+    }
+
+    // If no token, redirect to index
+    if (!token) {
+        console.log('⚠️ [repo-review] no token, redirecting to index');
+        window.location.href = '/index.html';
+        return;
+    }
+
     // Elements
     const repoNameEl = document.getElementById('repo-name');
     const fileSearch = document.getElementById('file-search');
@@ -35,27 +48,21 @@ let currentRepo = new URLSearchParams(window.location.search).get('repo') || loc
         ? 'http://localhost:5000' 
         : 'https://codementorai-vqp8.onrender.com';
 
-    // Elements for repo selector
-    const repoSelectorPanel = document.getElementById('repo-selector-panel');
-    const reposListEl = document.getElementById('repos-list');
-    const closeRepoSelectorBtn = document.getElementById('close-repo-selector');
-    const githubStatusEl = document.querySelector('.github-status') || repoNameEl; // Fallback
-
-    // Show repo selector if no repo
+    // If no repo query, display repo list as the first action
     if (!currentRepo) {
-        await checkGitHubSession();
-        repoSelectorPanel?.classList.remove('hidden');
+        repoNameEl.textContent = 'Select one of your repositories';
+        await loadReposViaGitHub();
         return;
     }
     repoNameEl.textContent = currentRepo;
-    localStorage.setItem('selectedRepo', currentRepo);
-
     // Load files
     await loadFiles();
 
 // Event listeners
     refreshBtn.addEventListener('click', loadFiles);
-    backBtn.addEventListener('click', () => github?.goToHome());
+    backBtn.addEventListener('click', () => {
+        window.location.href = '/index.html';
+    });
     fileSearch?.addEventListener('input', (e) => {
         fileSearchTerm = e.target.value.toLowerCase();
         renderFiles(files);
@@ -75,16 +82,92 @@ let currentRepo = new URLSearchParams(window.location.search).get('repo') || loc
     async function loadFiles() {
         try {
             showLoading(filesTree, 'Loading files...');
-            const res = await fetch(`${apiUrl}/api/github/repo-files?repo=${encodeURIComponent(currentRepo)}`);
-            if (!res.ok) {
-                if (res.status === 401) throw new Error('GitHub session expired. Please reconnect.');
-                throw new Error(`API error: ${res.status}`);
-            }
+            const res = await fetch(`${apiUrl}/api/github/repo-files?repo=${encodeURIComponent(currentRepo)}`, {
+                credentials: 'include'
+            });
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
             const data = await res.json();
-            files = data.files || data || [];
+            files = data.files || [];
             renderFiles(files);
         } catch (err) {
             filesTree.innerHTML = `<div class="error">Failed to load files: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    async function loadReposViaGitHub() {
+        const token = localStorage.getItem('github_token');
+        if (!token) {
+            console.log('❌ No token available for repo fetching');
+            filesTree.innerHTML = '<div class="error">Not connected to GitHub. Please connect first.</div>';
+            return;
+        }
+
+        try {
+            console.log('🔄 Fetching repos from GitHub API...');
+            showLoading(filesTree, 'Loading your repositories...');
+            
+            const response = await fetch('https://api.github.com/user/repos?per_page=100', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github.v3+json'
+                }
+            });
+
+            console.log('📡 GitHub API repos response status:', response.status);
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    console.error('❌ Token invalid or expired');
+                    localStorage.removeItem('github_token');
+                    filesTree.innerHTML = '<div class="error">GitHub token expired. Please reconnect.</div>';
+                    setTimeout(() => window.location.href = '/index.html', 2000);
+                    return;
+                }
+                throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+            }
+
+            const reposData = await response.json();
+            console.log('📦 Repos loaded from GitHub API:', reposData.length);
+
+            if (!reposData || reposData.length === 0) {
+                filesTree.innerHTML = '<div class="empty">No repositories found.</div>';
+                return;
+            }
+
+            filesTree.innerHTML = reposData.map(repo => `
+                <div class="repo-card" style="cursor:pointer;padding:.7rem;border:1px solid #ececec;margin-bottom:.5rem;border-radius:6px;">
+                    <strong>${escapeHtml(repo.full_name)}</strong><br>
+                    <small>${escapeHtml(repo.description || 'No description')}</small>
+                    <br>
+                    <button class="select-repo-btn" data-repo="${escapeHtml(repo.full_name)}" style="margin-top:0.5rem;">Select Repository</button>
+                </div>
+            `).join('');
+
+            // Add event listeners to select buttons
+            document.querySelectorAll('.select-repo-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const repoName = e.target.getAttribute('data-repo');
+                    window.location.href = `/repo-review.html?repo=${encodeURIComponent(repoName)}`;
+                });
+            });
+
+        } catch (error) {
+            console.error('❌ GitHub repos fetch failed:', error);
+            filesTree.innerHTML = `<div class="error">Unable to load repositories: ${error.message}</div>`;
+        }
+    }
+
+            filesTree.querySelectorAll('.select-repo-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const fullName = e.target.closest('.repo-card')?.querySelector('strong')?.textContent;
+                    if (fullName) {
+                        window.location.href = `/repo-review.html?repo=${encodeURIComponent(fullName)}`;
+                    }
+                });
+            });
+
+        } catch (err) {
+            filesTree.innerHTML = `<div class="error">Failed to load repositories: ${escapeHtml(err.message)}</div>`;
         }
     }
 
@@ -173,7 +256,9 @@ let currentRepo = new URLSearchParams(window.location.search).get('repo') || loc
             analyzeBtn.disabled = false;
             showLoading(codeViewer, 'Loading content...');
 
-            const res = await fetch(`${apiUrl}/api/github/file?repo=${encodeURIComponent(currentRepo)}&path=${encodeURIComponent(path)}`);
+            const res = await fetch(`${apiUrl}/api/github/file?repo=${encodeURIComponent(currentRepo)}&path=${encodeURIComponent(path)}`, {
+                credentials: 'include'
+            });
             if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
             const data = await res.json();
             const content = data.content || 'Empty file';
@@ -210,6 +295,7 @@ let currentRepo = new URLSearchParams(window.location.search).get('repo') || loc
             const res = await fetch(`${apiUrl}/api/github/analyze-file`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ repo: currentRepo, path: currentFile })
             });
             if (!res.ok) throw new Error(`Analysis failed: ${res.status}`);

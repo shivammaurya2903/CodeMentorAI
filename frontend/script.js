@@ -265,11 +265,11 @@ function renderRepos(repos) {
   const grid = document.getElementById('repos-grid');
   const title = document.getElementById('repos-title');
   grid.innerHTML = repos.map(repo => `
-    <div class="repo-card" data-repo="${repo.full_name || repo.name}">
-      <h4>${repo.name}</h4>
-      <p>${repo.description || 'No description'}</p>
-      <span class="repo-lang">${repo.language || 'Unknown'}</span>
-      <button class="review-repo-btn" onclick="openRepoReview('${repo.full_name || repo.name}')">Review Repo →</button>
+    <div class="repo-card" data-repo="${escapeHtml(repo.full_name || repo.name)}">
+      <h4>${escapeHtml(repo.name)}</h4>
+      <p>${escapeHtml(repo.description || 'No description')}</p>
+      <span class="repo-lang">${escapeHtml(repo.language || 'Unknown')}</span>
+      <button class="review-repo-btn" onclick="openRepoReview('${escapeHtml(repo.full_name || repo.name)}')">Review Repo →</button>
     </div>
   `).join('');
   grid.style.display = 'grid';

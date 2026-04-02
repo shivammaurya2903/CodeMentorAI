@@ -262,14 +262,14 @@ const refactoredHtml = data.optimized_code || data.refactored_code
 
   function displayRepos(repos) {
     reposList.innerHTML = repos.map(repo => `
-      <div class="repo-item" data-repo="${repo.full_name}">
+      <div class="repo-item" data-repo="${escapeHtml(repo.full_name)}">
         <div class="repo-info">
-          <h5>${repo.name}</h5>
-          <p>${repo.description || 'No description'}</p>
-          <span class="repo-lang">${repo.language || 'Unknown'}</span>
+          <h5>${escapeHtml(repo.name)}</h5>
+          <p>${escapeHtml(repo.description || 'No description')}</p>
+          <span class="repo-lang">${escapeHtml(repo.language || 'Unknown')}</span>
           ${repo.private ? '<span class="private">Private</span>' : ''}
         </div>
-        <button class="load-files-btn" data-repo="${repo.full_name}">Load Files</button>
+        <button class="load-files-btn" data-repo="${escapeHtml(repo.full_name)}">Load Files</button>
       </div>
     `).join('');
     
