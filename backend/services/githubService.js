@@ -12,8 +12,7 @@ if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
 }
 
 // GitHub OAuth token exchange (server-side)
-async function exchangeCodeForToken(code, state) {
-  const sessionId = state; // Use state as simple sessionId
+async function exchangeCodeForToken(code, sessionId, state) {
   if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
     throw new Error('GitHub app credentials not configured');
   }
@@ -37,8 +36,12 @@ async function exchangeCodeForToken(code, state) {
     throw new Error(`OAuth error: ${tokenData.error_description || tokenData.error}`);
   }
 
+  if (!tokenData.access_token) {
+    throw new Error('No access token returned by GitHub');
+  }
+
   userTokens.set(sessionId, { access_token: tokenData.access_token });
-  return { success: true, sessionId };
+  return { success: true, sessionId, access_token: tokenData.access_token };
 }
 
 // Get Octokit with user token
@@ -48,6 +51,14 @@ function getOctokit(sessionId) {
     throw new Error('No GitHub token found for session. Connect GitHub first.');
   }
   return new Octokit({ auth: userData.access_token });
+}
+
+function parseRepoFullName(repoFullName) {
+  const [owner, repo] = String(repoFullName).split('/');
+  if (!owner || !repo) {
+    throw new Error('Invalid repository name format. Expected owner/repo');
+  }
+  return { owner, repo };
 }
 
 // GET user repos
@@ -67,10 +78,74 @@ async function getUserRepos(sessionId) {
   }));
 }
 
+// GET authenticated user profile
+async function getAuthenticatedUser(sessionId) {
+  const octokit = getOctokit(sessionId);
+  const { data: user } = await octokit.rest.users.getAuthenticated();
+  return {
+    login: user.login,
+    avatar_url: user.avatar_url,
+    bio: user.bio,
+    html_url: user.html_url,
+  };
+}
+
+// GET a single repository details
+async function getRepository(sessionId, owner, repo) {
+  const octokit = getOctokit(sessionId);
+  const { data } = await octokit.rest.repos.get({ owner, repo });
+  return {
+    name: data.name,
+    full_name: data.full_name,
+    description: data.description,
+    language: data.language,
+    private: data.private,
+    default_branch: data.default_branch,
+    stargazers_count: data.stargazers_count,
+    forks_count: data.forks_count,
+    open_issues_count: data.open_issues_count,
+    html_url: data.html_url,
+  };
+}
+
 // GET repo files/tree (top-level + recursive simple)
 async function getRepoFiles(sessionId, repo) {
   const octokit = getOctokit(sessionId);
-  const { data: tree } = await octokit.rest.git.getTree({ owner: repo.split('/')[0], repo: repo.split('/')[1], recursive: true });
+  const { owner, repo: repoName } = parseRepoFullName(repo);
+
+  // Resolve the default branch commit, then fetch its tree recursively.
+  const { data: repoData } = await octokit.rest.repos.get({ owner, repo: repoName });
+  const defaultBranch = repoData.default_branch || 'main';
+
+  const { data: branchData } = await octokit.rest.repos.getBranch({
+    owner,
+    repo: repoName,
+    branch: defaultBranch,
+  });
+
+  const commitSha = branchData.commit?.sha;
+  if (!commitSha) {
+    throw new Error('Unable to resolve repository branch commit SHA');
+  }
+
+  const { data: commitData } = await octokit.rest.git.getCommit({
+    owner,
+    repo: repoName,
+    commit_sha: commitSha,
+  });
+
+  const treeSha = commitData.tree?.sha;
+  if (!treeSha) {
+    throw new Error('Unable to resolve repository tree SHA');
+  }
+
+  const { data: tree } = await octokit.rest.git.getTree({
+    owner,
+    repo: repoName,
+    tree_sha: treeSha,
+    recursive: 'true',
+  });
+
   return tree.tree
     .filter(node => node.type === 'blob') // files only
     .map(file => ({ path: file.path, type: file.mode === '100644' ? 'file' : 'exec', sha: file.sha }))
@@ -80,9 +155,10 @@ async function getRepoFiles(sessionId, repo) {
 // GET file content
 async function getFileContent(sessionId, repo, path) {
   const octokit = getOctokit(sessionId);
+  const { owner, repo: repoName } = parseRepoFullName(repo);
   const { data } = await octokit.rest.repos.getContent({
-    owner: repo.split('/')[0],
-    repo: repo.split('/')[1],
+    owner,
+    repo: repoName,
     path,
   });
   if (data.type !== 'file') {
@@ -94,9 +170,10 @@ async function getFileContent(sessionId, repo, path) {
 // GET PRs (bonus)
 async function getPullRequests(sessionId, repo, state = 'open') {
   const octokit = getOctokit(sessionId);
+  const { owner, repo: repoName } = parseRepoFullName(repo);
   const { data: prs } = await octokit.rest.pulls.list({
-    owner: repo.split('/')[0],
-    repo: repo.split('/')[1],
+    owner,
+    repo: repoName,
     state,
     sort: 'created',
     direction: 'desc',
@@ -115,6 +192,8 @@ async function getPullRequests(sessionId, repo, state = 'open') {
 module.exports = {
   exchangeCodeForToken,
   getUserRepos,
+  getAuthenticatedUser,
+  getRepository,
   getRepoFiles,
   getFileContent,
   getPullRequests,

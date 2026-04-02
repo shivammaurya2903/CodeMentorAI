@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub OAuth Callback</title>
+</head>
+<body>
+  <script>
+    (function () {
+      function getBackendBase() {
+        var host = window.location.hostname;
+        var protocol = window.location.protocol;
+        var isIpv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+        var isLocalHost = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local') || isIpv4;
+
+        if (window.location.port === '5000') {
+          return protocol + '//' + host + ':5000';
+        }
+
+        if (isLocalHost) {
+          return protocol + '//' + host + ':5000';
+        }
+
+        return '';
+      }
+
+      var backendBase = getBackendBase();
+      var query = window.location.search || '';
+      window.location.replace(backendBase + '/auth/github/callback' + query);
+    })();
+  </script>
+</body>
+</html>

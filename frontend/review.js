@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
         ? 'http://localhost:5000' 
-        : 'https://codementorai-vqp8.onrender.com';
+        : '';
       const response = await fetch(`${apiUrl}/api/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -218,7 +218,9 @@ const refactoredHtml = data.optimized_code || data.refactored_code
 // GitHub functions
   async function initGitHub() {
     if (!githubConnectBtn) return;
-    
+
+    await github?.refreshStatus();
+
     // Check if already connected
     const isConnected = github?.isConnected();
     if (isConnected) {
@@ -237,14 +239,16 @@ const refactoredHtml = data.optimized_code || data.refactored_code
 
   async function checkGitHubStatus(sessionId) {
     const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/github/status`);
+    const response = await fetch(`${apiUrl}/api/github/status`, {
+      credentials: 'include'
+    });
     return response.ok ? await response.json() : { connected: false };
   }
 
   function getApiUrl() {
     return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
       ? 'http://localhost:5000' 
-      : 'https://codementorai-vqp8.onrender.com';
+      : '';
   }
 
   async function loadRepos() {
@@ -252,7 +256,9 @@ const refactoredHtml = data.optimized_code || data.refactored_code
       const apiUrl = getApiUrl();
       githubReposPanel.classList.remove('hidden');
       reposList.innerHTML = '<div class="loading">Loading repos...</div>';
-      const response = await fetch(`${apiUrl}/api/github/repos`);
+      const response = await fetch(`${apiUrl}/api/github/repos`, {
+        credentials: 'include'
+      });
       const data = await response.json();
       displayRepos(data.repos);
     } catch (err) {
@@ -288,7 +294,9 @@ const refactoredHtml = data.optimized_code || data.refactored_code
       const apiUrl = getApiUrl();
       githubFilesPanel.classList.remove('hidden');
       filesList.innerHTML = '<div class="loading">Loading files...</div>';
-      const response = await fetch(`${apiUrl}/api/github/repo-files?repo=${repo}`);
+      const response = await fetch(`${apiUrl}/api/github/repo-files?repo=${repo}`, {
+        credentials: 'include'
+      });
       const data = await response.json();
       displayFiles(data.files, repo);
     } catch (err) {
@@ -323,6 +331,7 @@ const refactoredHtml = data.optimized_code || data.refactored_code
       const response = await fetch(`${apiUrl}/api/github/analyze-file`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ repo, filePath, type: 'review' })
       });
 
