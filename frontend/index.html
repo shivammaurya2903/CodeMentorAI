@@ -289,16 +289,105 @@
     <script src="chat-widget.js"></script>
     <script>
       // Handle GitHub connection button clicks
-      document.getElementById('github-connect-btn')?.addEventListener('click', () => {
-        github.connectGitHub();
+      const connectButtons = [
+        'github-connect-btn',
+        'github-notice-connect-btn',
+        'final-github-connect'
+      ];
+
+      connectButtons.forEach(id => {
+        document.getElementById(id)?.addEventListener('click', () => {
+          const token = localStorage.getItem('github_token');
+          console.log('🔗 Connect button clicked, token exists:', !!token);
+          
+          if (token) {
+            console.log('✅ Token found, redirecting to repo-review.html');
+            window.location.href = '/repo-review.html';
+          } else {
+            console.log('🔄 No token, starting OAuth flow');
+            window.location.href = 'http://localhost:5000/auth/github';
+          }
+        });
       });
 
-      document.getElementById('github-notice-connect-btn')?.addEventListener('click', () => {
-        github.connectGitHub();
-      });
+      function setConnectionStatus(connected, message) {
+        const card = document.getElementById('github-user-card');
+        const statusText = document.getElementById('user-username');
+        const notice = document.getElementById('github-notice');
+        const reposTitle = document.getElementById('repos-title');
+        const reposGrid = document.getElementById('repos-grid');
 
-      document.getElementById('final-github-connect')?.addEventListener('click', () => {
-        github.connectGitHub();
+        if (connected) {
+          if (card) card.style.display = 'flex';
+          if (statusText) statusText.textContent = message || '✅ GitHub Connected';
+          if (notice) notice.style.display = 'none';
+          if (reposTitle) reposTitle.style.display = 'block';
+          if (reposGrid) reposGrid.style.display = 'grid';
+        } else {
+          if (card) card.style.display = 'none';
+          if (notice) notice.style.display = 'block';
+          if (reposTitle) reposTitle.style.display = 'none';
+          if (reposGrid) reposGrid.style.display = 'none';
+        }
+      }
+
+      async function fetchRepositories() {
+        const token = localStorage.getItem('github_token');
+        if (!token) {
+          setConnectionStatus(false);
+          return;
+        }
+
+        setConnectionStatus(true, '✅ GitHub Connected');
+        // Already connected behavior: redirect to repo-review page
+        window.location.href = '/repo-review.html';
+        return;
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        // Check if user is already connected
+        const storedToken = localStorage.getItem('github_token');
+        if (storedToken) {
+          console.log('✅ Token already in storage, showing connected status');
+          setConnectionStatus(true, '✅ GitHub Connected');
+        } else {
+          setConnectionStatus(false);
+        }
+      });
+              localStorage.removeItem('github_token');
+              setConnectionStatus(false);
+              return;
+            }
+            throw new Error(`${response.status} ${response.statusText}`);
+          }
+
+          const repos = await response.json();
+          console.log('📦 GitHub repos loaded:', repos);
+
+          const reposGrid = document.getElementById('repos-grid');
+          if (reposGrid) {
+            reposGrid.innerHTML = repos.length
+              ? repos.map(repo => `<div class="repo-card"><a href="repo-review.html?repo=${encodeURIComponent(repo.full_name)}">${repo.full_name}</a></div>`).join('')
+              : '<div class="empty">No repositories found.</div>';
+            reposGrid.style.display = repos.length ? 'grid' : 'block';
+          }
+
+        } catch (error) {
+          console.error('❌ GitHub repos fetch failed:', error);
+          const reposGrid = document.getElementById('repos-grid');
+          if (reposGrid) reposGrid.innerHTML = `<div class="error">Unable to load repos: ${error.message}</div>`;
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        // Check if user is already connected
+        const storedToken = localStorage.getItem('github_token');
+        if (storedToken) {
+          console.log('✅ Token already in storage, showing connected status');
+          setConnectionStatus(true, '✅ GitHub Connected');
+        } else {
+          setConnectionStatus(false);
+        }
       });
     </script>
 </body>

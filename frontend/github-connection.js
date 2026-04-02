@@ -84,19 +84,26 @@ class GitHubConnectionManager {
    */
   smartRedirect(currentPage = 'review') {
     const isConnected = this.isConnected();
+    const urlToken = new URLSearchParams(window.location.search).get('token');
     
-    console.log(`📍 Current page: ${currentPage}, Connected: ${isConnected}`);
+    console.log(`📍 Current page: ${currentPage}, Connected: ${isConnected}, URL token: ${!!urlToken}`);
+
+    // If token is in URL, allow callback logic to proceed (so token gets saved)
+    if (urlToken) {
+      console.log('⏳ Token present in URL, waiting for backend callback handling before redirect decision');
+      return true;
+    }
 
     // If user is on review.html but NOT connected → redirect to index
     if (currentPage === 'review' && !isConnected) {
-      console.log('⚠️ On review.html but not connected → redirecting to index.html');
+      console.log('⚠️ On review.html but not connected → redirecting to index');
       window.location.href = `${this.FRONTEND_URL}/index.html`;
       return false;
     }
 
     // If user is on repo-review.html but NOT connected → redirect to index
     if (currentPage === 'repo-review' && !isConnected) {
-      console.log('⚠️ On repo-review.html but not connected → redirecting to index.html');
+      console.log('⚠️ On repo-review.html but not connected → redirecting to index');
       window.location.href = `${this.FRONTEND_URL}/index.html`;
       return false;
     }
@@ -116,7 +123,14 @@ class GitHubConnectionManager {
    * Initiate GitHub OAuth flow
    */
   connectGitHub() {
-    console.log('🔗 Starting GitHub OAuth flow...');
+    const storedToken = this.getToken();
+    if (storedToken) {
+      console.log('✅ GitHub token already present, redirecting to repo-review.html');
+      window.location.href = `${this.FRONTEND_URL}/repo-review.html`;
+      return;
+    }
+
+    console.log('🔗 Starting GitHub OAuth flow (no token found)');
     window.location.href = `${this.API_URL}/auth/github`;
   }
 
