@@ -1,5 +1,11 @@
-// Existing animations + new app logic
-document.addEventListener('DOMContentLoaded', function() {
+// ============================================================================
+// Page load initialization
+// ============================================================================
+document.addEventListener('DOMContentLoaded', async function() {
+  // Handle GitHub connection on index.html
+  if (document.getElementById('github-section')) {
+    await loadGitHubDashboard();
+  }
   // Existing smooth scrolling
   document.querySelectorAll('a[href^=\"#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
@@ -206,9 +212,86 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function connectGitHub() {
-  const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? 'http://localhost:5000/api/github/oauth' 
-    : 'https://codementorai-vqp8.onrender.com/api/github/oauth';
-  window.location.href = apiUrl;
+  const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:5000/auth/github' 
+    : 'https://codementorai-vqp8.onrender.com/auth/github';
+  window.location.href = backendUrl;
 }
+
+// GitHub Dashboard Functions (for index.html)
+async function loadGitHubDashboard() {
+  const apiUrl = getApiUrl();
+  try {
+    // Check user
+    const userRes = await fetch(`${apiUrl}/api/github/user`);
+    if (!userRes.ok) {
+      showGitHubNotice();
+      return;
+    }
+    const user = await userRes.json();
+    
+    // Show user card
+    document.getElementById('user-avatar').src = user.avatar_url;
+    document.getElementById('user-username').textContent = user.login || user.username;
+    document.getElementById('user-bio').textContent = user.bio || 'No bio';
+    document.getElementById('github-user-card').style.display = 'block';
+    
+    // Load repos
+    const reposRes = await fetch(`${apiUrl}/api/github/repos`);
+    if (!reposRes.ok) throw new Error('Failed to load repos');
+    const repos = await reposRes.json();
+    
+    renderRepos(repos);
+  } catch (err) {
+    console.error('GitHub load error:', err);
+    showGitHubNotice();
+  }
+}
+
+function renderRepos(repos) {
+  const grid = document.getElementById('repos-grid');
+  const title = document.getElementById('repos-title');
+  grid.innerHTML = repos.map(repo => `
+    <div class="repo-card" data-repo="${repo.full_name || repo.name}">
+      <h4>${repo.name}</h4>
+      <p>${repo.description || 'No description'}</p>
+      <span class="repo-lang">${repo.language || 'Unknown'}</span>
+      <button class="review-repo-btn" onclick="openRepoReview('${repo.full_name || repo.name}')">Review Repo →</button>
+    </div>
+  `).join('');
+  grid.style.display = 'grid';
+  title.style.display = 'block';
+  document.getElementById('repos-container').scrollIntoView({ behavior: 'smooth' });
+}
+
+function openRepoReview(repoName) {
+  window.location.href = `repo-review.html?repo=${encodeURIComponent(repoName)}`;
+}
+
+function getApiUrl() {
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:5000' 
+    : 'https://codementorai-vqp8.onrender.com';
+}
+
+function showGitHubNotice() {
+  document.getElementById('github-notice').style.display = 'block';
+  document.getElementById('github-user-card').style.display = 'none';
+  document.getElementById('repos-container').style.display = 'none';
+}
+
+// Auto-poll GitHub status after OAuth (check every 3s for 60s)
+let pollInterval;
+function startGitHubPoll() {
+  let attempts = 0;
+  pollInterval = setInterval(async () => {
+    attempts++;
+    await loadGitHubDashboard();
+    if (attempts >= 20) { // 60s
+      clearInterval(pollInterval);
+    }
+  }, 3000);
+}
+
 // Global connectGitHub available for onclick handlers
+

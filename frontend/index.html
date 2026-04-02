@@ -22,6 +22,7 @@
                 <li><a href="#features">Features</a></li>
                 <li><a href="docs.html">Docs</a></li>
                 <li><a href="review.html">Code Review</a></li>
+                <li><a href="repo-review.html">Repo Review</a></li>
             </ul>
             <div class="hamburger">
                 <span></span>
@@ -38,7 +39,7 @@
                 <h1 class="hero-title">Get AI Mentorship for Your Code — Instantly</h1>
                 <p class="hero-subtitle">Upload code or connect your repo and get feedback like a senior developer in seconds.</p>
                 <div class="hero-ctas">
-                    <a href="http://localhost:5000/api/github/oauth" class="cta-primary" id="index-github-connect" rel="noopener noreferrer">Connect GitHub</a>
+                    <button id="github-connect-btn" class="cta-primary">🔗 Connect GitHub</button>
                     <a href="review.html" class="cta-secondary">Get Started</a>
                 </div>
             </div>
@@ -60,8 +61,34 @@
         </div>
     </section>
 
+    <!-- GitHub Dashboard Section -->
+    <section id="github-section">
+        <div class="container">
+            <div id="github-user-card" class="github-user-card" style="display: none;">
+                <img id="user-avatar" class="user-avatar" src="" alt="GitHub Avatar">
+                <div class="github-user-info">
+                    <h3 id="user-username">Connect GitHub</h3>
+                    <p id="user-bio"></p>
+                </div>
+                <p>✅ Connected and ready to review your repositories</p>
+            </div>
+            <div id="repos-container">
+                <h2 class="section-title" id="repos-title" style="display: none;">Your Repositories</h2>
+                <div id="repos-grid" class="repos-grid" style="display: none;"></div>
+            </div>
+            <div id="github-notice" style="text-align: center; padding: 3rem;">
+                <h3>🚀 GitHub Repository Review</h3>
+                <p>Connect your GitHub account to browse all your repositories and get AI-powered code reviews for any file.</p>
+                <div style="margin-top: 2rem;">
+                    <button id="github-notice-connect-btn" class="cta-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Connect GitHub Now</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Features Section -->
     <section id="features" class="features">
+
         <div class="container">
             <h2 class="section-title">Powerful Features for Developers</h2>
             <div class="features-grid">
@@ -225,7 +252,7 @@
             <p>Join 10,000+ developers improving their code with AI.</p>
             <div class="cta-group">
                 <a href="review.html" class="cta-primary large">Get Started Free</a>
-<button onclick="connectGitHub()" class="cta-secondary large" id="final-github-connect">Connect GitHub</button>
+                <button class="cta-secondary large" id="final-github-connect">Connect GitHub</button>
             </div>
         </div>
     </section>
@@ -242,7 +269,7 @@
                     <div class="link-group">
                         <h4>Product</h4>
                         <a href="#">Features</a>
-                <a href="docs.html">Docs</a>
+                        <a href="docs.html">Docs</a>
                     </div>
                 </div>
                 <div class="footer-social">
@@ -257,8 +284,23 @@
         </div>
     </footer>
 
+    <script src="github-connection.js"></script>
     <script src="script.js"></script>
     <script src="chat-widget.js"></script>
+    <script>
+      // Handle GitHub connection button clicks
+      document.getElementById('github-connect-btn')?.addEventListener('click', () => {
+        github.connectGitHub();
+      });
+
+      document.getElementById('github-notice-connect-btn')?.addEventListener('click', () => {
+        github.connectGitHub();
+      });
+
+      document.getElementById('final-github-connect')?.addEventListener('click', () => {
+        github.connectGitHub();
+      });
+    </script>
 </body>
 </html>
 

@@ -50,22 +50,30 @@ app.use("/api/explain", explainRoute);
 app.use("/api/review", reviewRoute);
 app.use("/api/github", githubRoute);
 
-// ============================================================================
-// 🔐 GitHub OAuth Callback Route (matches GitHub app settings)
-// ============================================================================
+
+app.get('/auth/github', (req, res) => {
+  const state = req.sessionID;
+  const githubUrl = `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=repo&state=${state}`;
+  res.redirect(githubUrl);
+});
+
+
 app.get('/auth/github/callback', async (req, res) => {
   const { code, state, error } = req.query;
   
-  // Error from GitHub
+  const { userTokens } = require('./services/githubService');
+  const FRONTEND_URL = 'http://localhost:5500';
+  
+  // Handle user cancellation or error from GitHub
   if (error) {
-    console.error('❌ GitHub OAuth error:', error);
-    return res.redirect(`http://localhost:5500/review.html?error=${error}`);
+    console.error('❌ GitHub OAuth cancelled/error:', error);
+    return res.redirect(`${FRONTEND_URL}/index.html`);
   }
   
-  // Missing code
+  // No authorization code received
   if (!code) {
     console.error('❌ No authorization code received');
-    return res.redirect('http://localhost:5500/review.html?error=no_code');
+    return res.redirect(`${FRONTEND_URL}/index.html`);
   }
 
   try {
@@ -74,20 +82,30 @@ app.get('/auth/github/callback', async (req, res) => {
     // Exchange code for access token
     await exchangeCodeForToken(code, state || req.sessionID);
     
+    // Get token for localStorage
+    const sessionId = state || req.sessionID;
+    const tokenData = userTokens.get(sessionId);
+    if (!tokenData?.access_token) {
+      throw new Error('Token not found after exchange');
+    }
+    
     // Mark session as connected
     req.session.githubConnected = true;
     req.session.githubCode = code;
+    req.session.githubToken = tokenData.access_token;
     req.session.save((err) => {
       if (err) console.error('Session save error:', err);
     });
 
-    console.log('✅ GitHub OAuth successful! Redirecting to review.html');
+    console.log('✅ GitHub OAuth successful! Redirecting to repo-review.html with token');
     
-    // Redirect to frontend with success status
-    res.redirect('http://localhost:5500/review.html?github=connected');
+    // Redirect to repo-review page with token for localStorage (success case)
+    const safeToken = encodeURIComponent(tokenData.access_token);
+    res.redirect(`${FRONTEND_URL}/repo-review.html?token=${safeToken}`);
   } catch (err) {
     console.error('❌ OAuth token exchange failed:', err.message);
-    res.redirect(`http://localhost:5500/review.html?error=${encodeURIComponent(err.message)}`);
+    // On error, redirect back to home
+    res.redirect(`${FRONTEND_URL}/index.html`);
   }
 });
 

@@ -34,19 +34,24 @@ router.get('/oauth', (req, res) => {
 router.get('/callback', async (req, res) => {
   const { code, state, error } = req.query;
   
-  if (error) {
-    console.error('❌ GitHub OAuth error:', error);
-    return res.redirect(`http://localhost:5500/review.html?error=${error}`);
-  }
+  const { userTokens } = require('../services/githubService');
   
-  if (!code) {
-    console.error('❌ No authorization code received');
-    return res.redirect('http://localhost:5500/review.html?error=no_code');
+  // Error/cancel from GitHub
+  if (error || !code) {
+    console.error('❌ GitHub OAuth cancelled/error:', error || 'no_code');
+    return res.redirect('http://localhost:5500/index.html');
   }
 
   try {
     console.log('🔄 Exchanging code for GitHub token via /api/github/callback...');
     await exchangeCodeForToken(code, state || req.sessionID);
+    
+    // Get token for localStorage
+    const sessionId = state || req.sessionID;
+    const tokenData = userTokens.get(sessionId);
+    if (!tokenData?.access_token) {
+      throw new Error('Token not found after exchange');
+    }
     
     req.session.githubConnected = true;
     req.session.githubCode = code;
@@ -54,13 +59,14 @@ router.get('/callback', async (req, res) => {
       if (err) console.error('Session save error:', err);
     });
 
-    console.log('✅ GitHub OAuth successful! Redirecting to review.html');
+    console.log('✅ GitHub OAuth successful! Redirecting with token');
     
-    // Redirect to frontend
-    res.redirect(`http://localhost:5500/review.html?github=connected`);
+    // Redirect with token for localStorage
+    const safeToken = encodeURIComponent(tokenData.access_token);
+    res.redirect(`http://localhost:5500/review.html?token=${safeToken}`);
   } catch (err) {
     console.error('❌ OAuth token exchange failed:', err.message);
-    res.redirect(`http://localhost:5500/review.html?error=${encodeURIComponent(err.message)}`);
+    res.redirect('http://localhost:5500/index.html');
   }
 });
 

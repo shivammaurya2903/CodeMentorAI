@@ -1,3 +1,9 @@
+// ============================================================================
+// 🔐 GitHub Connection Check & Token Handler
+// ============================================================================
+// Extract token from OAuth callback and save to localStorage
+github?.handleOAuthCallback();
+
 document.addEventListener('DOMContentLoaded', function () {
 
   const codeEditor = document.getElementById('code-editor');
@@ -213,28 +219,20 @@ const refactoredHtml = data.optimized_code || data.refactored_code
   async function initGitHub() {
     if (!githubConnectBtn) return;
     
-    // Check status
-    if (currentSessionId) {
-      const status = await checkGitHubStatus(currentSessionId);
-      if (status.connected) {
-        githubConnected = true;
-        githubStatus.textContent = 'Connected ✓';
-        githubReposBtn.classList.remove('hidden');
-        githubConnectBtn.classList.add('connected');
-      }
+    // Check if already connected
+    const isConnected = github?.isConnected();
+    if (isConnected) {
+      githubConnected = true;
+      githubStatus.textContent = 'Connected ✓';
+      githubReposBtn.classList.remove('hidden');
+      githubConnectBtn.classList.add('connected');
     }
 
-    githubConnectBtn.addEventListener('click', connectGitHub);
+    // Use new connection manager for button click
+    githubConnectBtn.addEventListener('click', () => github?.connectGitHub());
     githubReposBtn.addEventListener('click', loadRepos);
     closeReposBtn?.addEventListener('click', () => githubReposPanel.classList.add('hidden'));
     closeFilesBtn?.addEventListener('click', () => githubFilesPanel.classList.add('hidden'));
-  }
-
-  async function connectGitHub() {
-    const apiUrl = getApiUrl();
-    window.open(`${apiUrl}/api/github/oauth`, '_blank');
-    // Listen for callback (poll status or postMessage)
-    setTimeout(checkStatusInterval, 2000);
   }
 
   async function checkGitHubStatus(sessionId) {

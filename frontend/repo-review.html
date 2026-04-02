@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repo Review - CodeMentor AI</title>
+    <link rel="shortcut icon" href="icon.png" type="image/x-icon">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="repo.css">
+    <link rel="stylesheet" href="chat-widget.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <a href="index.html"><span class="logo-text">CodeMentor AI</span></a>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="docs.html">Docs</a></li>
+                <li><a href="review.html">Code Review</a></li>
+                <li><a href="repo-review.html" class="active">Repo Review</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="repo-review-container">
+        <!-- Repo Header -->
+        <div class="repo-header">
+            <div class="repo-info">
+                <h1 id="repo-name">Select Repository</h1>
+                <button id="refresh-files" class="btn-secondary">🔄 Refresh</button>
+                <button id="back-to-repos" class="btn-secondary">← Back to Home</button>
+            </div>
+            <input type="text" id="file-search" placeholder="🔍 Search files..." class="file-search">
+        </div>
+
+        <!-- Main Layout -->
+        <div class="repo-main">
+            <!-- Files Tree (Left) -->
+            <div class="files-panel">
+                <h3>📁 Files</h3>
+                <div id="files-tree" class="files-tree"></div>
+            </div>
+
+            <!-- Code Viewer + AI (Right) -->
+            <div class="content-panel">
+                <!-- Current File Header -->
+                <div class="file-header">
+                    <h3 id="current-file-path">Select a file to view...</h3>
+                    <button id="analyze-current" class="cta-primary">🤖 Analyze with AI</button>
+                </div>
+
+                <!-- Code Viewer -->
+                <div id="code-viewer" class="code-viewer">
+                    <div class="empty-state">
+                        <h4>👈 Select a file from the left panel</h4>
+                        <p>Browse your GitHub repository structure and click files to analyze them with AI</p>
+                    </div>
+                </div>
+
+                <!-- AI Analysis -->
+                <div id="ai-content" class="ai-content">
+                    <div class="ai-placeholder">
+                        <h4>AI Analysis will appear here</h4>
+                        <p>Click "Analyze with AI" after selecting a file</p>
+                    </div>
+                </div>
+
+                <!-- Chat -->
+                <div class="chat-section">
+                    <div id="chat-messages" class="chat-messages"></div>
+                    <div class="chat-input-container">
+                        <input type="text" id="chat-input" placeholder="💬 Ask AI about this file...">
+                        <button id="send-chat">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo-text">CodeMentor AI</span>
+                    <p>AI-powered repo analysis & code review</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 CodeMentor AI. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="github-connection.js"></script>
+    <script src="repo-review.js"></script>
+    <script src="chat-widget.js"></script>
+</body>
+</html>
+
