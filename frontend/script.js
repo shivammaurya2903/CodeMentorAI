@@ -261,10 +261,24 @@ async function loadGitHubDashboard() {
     const user = await userRes.json();
     
     // Show user card
-    document.getElementById('user-avatar').src = user.avatar_url;
-    document.getElementById('user-username').textContent = user.login || user.username;
-    document.getElementById('user-bio').textContent = user.bio || 'No bio';
-    document.getElementById('github-user-card').style.display = 'block';
+    const userAvatar = document.getElementById('user-avatar');
+    const userName = document.getElementById('user-username');
+    const userBio = document.getElementById('user-bio');
+    const userCard = document.getElementById('github-user-card');
+
+    if (userAvatar) {
+      userAvatar.src = user.avatar_url;
+    }
+    if (userName) {
+      userName.textContent = user.login || user.username || 'GitHub Connected';
+    }
+    if (userBio) {
+      userBio.textContent = user.bio || 'Ready for repository review';
+      userBio.title = user.bio || 'Ready for repository review';
+    }
+    if (userCard) {
+      userCard.style.display = 'inline-flex';
+    }
     
     // Main page only shows connection state. Repo browsing happens in repo-review.html.
     document.getElementById('github-notice').style.display = 'none';
@@ -314,7 +328,10 @@ function getApiUrl() {
 
 function showGitHubNotice() {
   document.getElementById('github-notice').style.display = 'block';
-  document.getElementById('github-user-card').style.display = 'none';
+  const userCard = document.getElementById('github-user-card');
+  if (userCard) {
+    userCard.style.display = 'none';
+  }
   document.getElementById('repos-container').style.display = 'none';
 }
 

@@ -18,17 +18,24 @@
             <div class="nav-logo">
                 <span class="logo-text">CodeMentor AI</span>
             </div>
-            <ul class="nav-menu">
-                <li><a href="#features">Features</a></li>
+            <ul id="primary-nav" class="nav-menu">
+                <li><a href="index.html">Dashboard</a></li>
                 <li><a href="docs.html">Docs</a></li>
                 <li><a href="review.html">Code Review</a></li>
                 <li><a href="repo-review.html">Repo Review</a></li>
             </ul>
-            <div class="hamburger">
-                <span></span>
-                <span></span>
-                <span></span>
+            <div id="github-user-card" class="nav-github-user" style="display: none;" aria-live="polite">
+                <img id="user-avatar" class="nav-user-avatar" src="" alt="GitHub Avatar">
+                <div class="nav-github-user-info">
+                    <span id="user-username" class="nav-user-name">Connected</span>
+                    <span id="user-bio" class="nav-user-meta"></span>
+                </div>
             </div>
+            <button class="hamburger" type="button" aria-label="Toggle navigation menu" aria-controls="primary-nav" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </nav>
 
@@ -64,14 +71,6 @@
     <!-- GitHub Dashboard Section -->
     <section id="github-section">
         <div class="container">
-            <div id="github-user-card" class="github-user-card" style="display: none;">
-                <img id="user-avatar" class="user-avatar" src="" alt="GitHub Avatar">
-                <div class="github-user-info">
-                    <h3 id="user-username">Connect GitHub</h3>
-                    <p id="user-bio"></p>
-                </div>
-                <p>✅ Connected and ready to review your repositories</p>
-            </div>
             <div id="repos-container">
                 <h2 class="section-title" id="repos-title" style="display: none;">Your Repositories</h2>
                 <div id="repos-grid" class="repos-grid" style="display: none;"></div>
@@ -284,6 +283,7 @@
         </div>
     </footer>
 
+    <script src="navbar.js"></script>
     <script src="github-connection.js"></script>
     <script src="script.js"></script>
     <script src="chat-widget.js"></script>
