@@ -1,6 +1,4 @@
-// ============================================================================
-// 🔐 GitHub Connection Check & Token Handler
-// ============================================================================
+
 // Extract token from OAuth callback and save to localStorage
 github?.handleOAuthCallback();
 
@@ -167,6 +165,9 @@ const refactoredHtml = data.optimized_code || data.refactored_code
       </div>
       ${refactoredHtml}
     `;
+    
+    // Auto-scroll to top for better UX
+    resultContent.scrollTop = 0;
   }
 
   if (copyBtn) {
