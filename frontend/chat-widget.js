@@ -375,11 +375,29 @@ class AIChat {
   }
 }
 
-// Initialize chat widget when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    window.aiChat = new AIChat();
-  });
-} else {
+// Initialize chat widget after the browser is idle so it does not compete with first paint.
+let chatWidgetInitialized = false;
+
+function initializeChatWidgetOnce() {
+  if (chatWidgetInitialized) {
+    return;
+  }
+
+  chatWidgetInitialized = true;
   window.aiChat = new AIChat();
+}
+
+function scheduleChatWidgetInitialization() {
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(initializeChatWidgetOnce, { timeout: 2000 });
+    return;
+  }
+
+  window.addEventListener('load', initializeChatWidgetOnce, { once: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', scheduleChatWidgetInitialization, { once: true });
+} else {
+  scheduleChatWidgetInitialization();
 }

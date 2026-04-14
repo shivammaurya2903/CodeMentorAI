@@ -2,10 +2,43 @@
 // Page load initialization
 // ============================================================================
 document.addEventListener('DOMContentLoaded', async function() {
-  // Handle GitHub connection on index.html
-  if (document.getElementById('github-section')) {
+  const githubSection = document.getElementById('github-section');
+  let hasLoadedGitHubDashboard = false;
+
+  async function loadGitHubDashboardOnce() {
+    if (hasLoadedGitHubDashboard || !githubSection) {
+      return;
+    }
+
+    hasLoadedGitHubDashboard = true;
     await loadGitHubDashboard();
   }
+
+  function observeGitHubSection() {
+    if (!githubSection) {
+      return;
+    }
+
+    if (!('IntersectionObserver' in window)) {
+      window.addEventListener('load', loadGitHubDashboardOnce, { once: true });
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        loadGitHubDashboardOnce();
+      }
+    }, {
+      rootMargin: '200px 0px',
+      threshold: 0.01,
+    });
+
+    observer.observe(githubSection);
+  }
+
+  observeGitHubSection();
+
   // Existing smooth scrolling
   document.querySelectorAll('a[href^=\"#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
@@ -21,16 +54,27 @@ document.addEventListener('DOMContentLoaded', async function() {
   });
 
   // Navbar scroll effects
-  window.addEventListener('scroll', () => {
-    const navbar = document.querySelector('.navbar');
-    if (window.scrollY > 100) {
-      navbar.style.background = 'rgba(15, 23, 42, 0.98)';
-      navbar.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.3)';
-    } else {
-      navbar.style.background = 'rgba(15, 23, 42, 0.95)';
-      navbar.style.boxShadow = 'none';
+  const navbar = document.querySelector('.navbar');
+  let scrollRafId = 0;
+
+  const updateNavbarState = () => {
+    scrollRafId = 0;
+    if (!navbar) {
+      return;
     }
-  });
+
+    navbar.classList.toggle('scrolled', window.scrollY > 100);
+  };
+
+  window.addEventListener('scroll', () => {
+    if (scrollRafId) {
+      return;
+    }
+
+    scrollRafId = window.requestAnimationFrame(updateNavbarState);
+  }, { passive: true });
+
+  updateNavbarState();
 
   // App functionality
   const tabs = document.querySelectorAll('.tab-btn');

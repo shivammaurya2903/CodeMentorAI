@@ -337,7 +337,6 @@ const refactoredHtml = data.optimized_code || data.refactored_code
       });
 
       const data = await response.json();
-      codeEditor.value = data.content || ''; // Load content
       displayResults(data);
     } catch (err) {
       alert(`Error analyzing file: ${err.message}`);

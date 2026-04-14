@@ -24,7 +24,7 @@
                 <li><a href="review.html">Code Review</a></li>
                 <li><a href="repo-review.html">Repo Review</a></li>
             </ul>
-            <div id="github-user-card" class="nav-github-user" style="display: none;" aria-live="polite">
+            <div id="github-user-card" class="nav-github-user" aria-live="polite">
                 <img id="user-avatar" class="nav-user-avatar" src="" alt="GitHub Avatar">
                 <div class="nav-github-user-info">
                     <span id="user-username" class="nav-user-name">Connected</span>
@@ -72,14 +72,14 @@
     <section id="github-section">
         <div class="container">
             <div id="repos-container">
-                <h2 class="section-title" id="repos-title" style="display: none;">Your Repositories</h2>
-                <div id="repos-grid" class="repos-grid" style="display: none;"></div>
+                <h2 class="section-title hidden" id="repos-title">Your Repositories</h2>
+                <div id="repos-grid" class="repos-grid hidden"></div>
             </div>
-            <div id="github-notice" style="text-align: center; padding: 3rem;">
+            <div id="github-notice" class="github-notice-panel">
                 <h3>🚀 GitHub Repository Review</h3>
                 <p>Connect your GitHub account to browse all your repositories and get AI-powered code reviews for any file.</p>
-                <div style="margin-top: 2rem;">
-                    <button id="github-notice-connect-btn" class="cta-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Connect GitHub Now</button>
+                <div class="github-notice-actions">
+                    <button id="github-notice-connect-btn" class="cta-primary github-notice-button">Connect GitHub Now</button>
                 </div>
             </div>
         </div>

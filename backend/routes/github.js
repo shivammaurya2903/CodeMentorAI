@@ -132,8 +132,21 @@ function getFrontendBaseUrl() {
   }
 }
 
+function buildAuthRedirectPath(page, query = '') {
+  const frontendBase = getFrontendBaseUrl();
+  const suffix = query ? `?${query}` : '';
+  return `${frontendBase}/auth/github/${page}/index.html${suffix}`;
+}
+
 // GET /api/github/oauth - Start OAuth
 router.get('/oauth', (req, res) => {
+  if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+    const frontendBase = getFrontendBaseUrl();
+    return res.redirect(
+      `${frontendBase}/index.html?oauth_error=${encodeURIComponent('GitHub OAuth is not configured on the server.')}`
+    );
+  }
+
   const state = crypto.randomBytes(32).toString('hex');
   req.session.oauthState = state;
   const params = new URLSearchParams({
@@ -154,19 +167,30 @@ router.get('/oauth', (req, res) => {
 // GET /api/github/callback - OAuth callback
 router.get('/callback', async (req, res) => {
   const { code, state, error, error_description: errorDescription } = req.query;
-  const frontendBase = getFrontendBaseUrl();
 
   if (error) {
     const message = errorDescription || 'GitHub authorization was cancelled.';
-    return res.redirect(`${frontendBase}/index.html?oauth_error=${encodeURIComponent(message)}`);
+    const query = new URLSearchParams({
+      reason: 'cancelled',
+      message,
+    }).toString();
+    return res.redirect(buildAuthRedirectPath('404', query));
   }
 
   if (!state || state !== req.session.oauthState) {
-    return res.redirect(`${frontendBase}/index.html`);
+    const query = new URLSearchParams({
+      reason: 'invalid_state',
+      message: 'GitHub authorization state is invalid or expired.',
+    }).toString();
+    return res.redirect(buildAuthRedirectPath('404', query));
   }
 
   if (!code) {
-    return res.redirect(`${frontendBase}/index.html`);
+    const query = new URLSearchParams({
+      reason: 'missing_code',
+      message: 'GitHub authorization code was not returned.',
+    }).toString();
+    return res.redirect(buildAuthRedirectPath('404', query));
   }
 
   try {
@@ -178,12 +202,16 @@ router.get('/callback', async (req, res) => {
       if (saveErr) {
         console.error('Session save error:', saveErr);
       }
-      const redirectUrl = `${frontendBase}/repo-review.html?connected=1`;
+      const redirectUrl = buildAuthRedirectPath('success', new URLSearchParams({ connected: '1' }).toString());
       res.redirect(redirectUrl);
     });
   } catch (err) {
     console.error('OAuth callback error:', err.message);
-    res.redirect(`${frontendBase}/index.html`);
+    const query = new URLSearchParams({
+      reason: 'token_exchange_failed',
+      message: 'GitHub authentication could not be completed.',
+    }).toString();
+    res.redirect(buildAuthRedirectPath('404', query));
   }
 });
 

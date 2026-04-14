@@ -181,6 +181,10 @@ async function getRepoFiles(sessionId, repo) {
     recursive: 'true',
   });
 
+  if (tree.truncated) {
+    throw new Error('Repository tree is too large to fetch recursively. Please narrow the repository or review files individually.');
+  }
+
   return tree.tree
     .filter(node => node.type === 'blob') // files only
     .map(file => ({ path: file.path, type: file.mode === '100644' ? 'file' : 'exec', sha: file.sha }))

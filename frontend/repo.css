@@ -61,6 +61,11 @@
   background-clip: text;
 }
 
+.connection-status {
+  font-size: 0.95rem;
+  margin-top: 0.4rem;
+}
+
 /* === Search Input === */
 .file-search {
   padding: 0.875rem 1.25rem;
@@ -168,6 +173,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  -webkit-user-select: none;
   user-select: none;
   color: #cbd5e1;
   position: relative;
@@ -187,6 +193,7 @@
   font-size: 0.8rem;
   color: #94a3b8;
   transition: transform 0.2s ease;
+  -webkit-user-select: none;
   user-select: none;
   flex-shrink: 0;
 }
@@ -321,8 +328,6 @@
 .scrollable-section {
   max-height: 100%;
   overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(59, 130, 246, 0.4) transparent;
 }
 
 .scrollable-section::-webkit-scrollbar {
@@ -566,6 +571,7 @@
   border-radius: 10px;
   margin-bottom: 1rem;
   border-left: 4px solid;
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
   transition: all 0.2s ease;
 }
