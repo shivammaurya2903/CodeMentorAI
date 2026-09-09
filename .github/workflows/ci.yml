@@ -1,0 +1,48 @@
+name: CodeMentorAI Continuous Integration
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-build:
+    name: Lint, Test, and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js v20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run Backend Test Suite
+        run: |
+          cd backend
+          npm test
+        env:
+          GROQ_API_KEY: "gsk_ci_mock_test_key"
+          SESSION_SECRET: "ci_test_session_secret_32_chars_long"
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build React SPA Bundle
+        run: |
+          cd frontend
+          npm run build

@@ -2,26 +2,26 @@ require("dotenv").config();
 
 // Validate required environment variables
 function validateEnvironment() {
+  const isProduction = process.env.NODE_ENV === 'production';
   const required = ['GROQ_API_KEY'];
-  const optional = ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'];
   
+  if (isProduction) {
+    required.push('SESSION_SECRET');
+  }
+
   const missing = required.filter(key => !process.env[key]);
   if (missing.length > 0) {
     console.error('❌ FATAL: Missing required environment variables:');
     missing.forEach(key => console.error(`  - ${key}`));
     process.exit(1);
   }
-  
-  const missingOptional = optional.filter(key => !process.env[key]);
-  if (missingOptional.length > 0) {
-    console.warn('⚠️ WARNING: Missing optional environment variables:');
-    missingOptional.forEach(key => console.warn(`  - ${key} (GitHub features disabled)`));
-  }
 }
 
 validateEnvironment();
+
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
 const rateLimit = require("express-rate-limit");
@@ -31,8 +31,17 @@ const analyseRoute = require("./routes/analyse");
 const explainRoute = require("./routes/explain");
 const reviewRoute = require("./routes/review");
 const githubRoute = require("./routes/github");
+const repositoryRoute = require("./routes/repository");
+const analysisRoute = require("./routes/analysis");
+const fixesRoute = require("./routes/fixes");
+const reportingRoute = require("./routes/reporting");
 
 const app = express();
+
+// Security Headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Managed by reverse proxy or frontend
+}));
 
 const allowedOrigins = (process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim()).filter(Boolean)
@@ -45,7 +54,6 @@ const allowedOrigins = (process.env.FRONTEND_URL
 
 app.use(cors({
   origin(origin, callback) {
-    // Allow server-to-server calls or tools with no Origin header.
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error(`Not allowed by CORS: ${origin}`));
@@ -55,27 +63,23 @@ app.use(cors({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { error: 'Too many requests from this IP, please try again later.', code: 'RATE_LIMIT_EXCEEDED' }
 });
 
 app.use(limiter);
 
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ limit: '10kb', extended: true }));
+// 2MB Body Parser size limit to support code payloads up to 50k characters
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(cookieParser());
+
 const isProduction = process.env.NODE_ENV === 'production';
-
-if (isProduction && !process.env.SESSION_SECRET) {
-  console.error('❌ FATAL: SESSION_SECRET must be set in production.');
-  process.exit(1);
-}
-
-const sessionSecret = process.env.SESSION_SECRET || 'dev-session-secret';
+const sessionSecret = process.env.SESSION_SECRET || 'dev-session-secret-fallback-key';
 
 if (!process.env.SESSION_SECRET) {
-  console.warn('WARNING: SESSION_SECRET not set. Using development fallback secret.');
+  console.warn('⚠️ WARNING: SESSION_SECRET not set in environment. Using development fallback.');
 }
 
 app.use(session({
@@ -83,23 +87,27 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     httpOnly: true,
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000,
   },
 }));
 
+// Routes
 app.use("/api/chat", chatRoute);
 app.use("/api/analyse", analyseRoute);
 app.use("/api/explain", explainRoute);
 app.use("/api/review", reviewRoute);
 app.use("/api/github", githubRoute);
+app.use("/api/repository", repositoryRoute);
+app.use("/api/analysis", analysisRoute);
+app.use("/api/fixes", fixesRoute);
+app.use("/api/reporting", reportingRoute);
 
 app.get('/auth/github', (req, res) => {
   res.redirect('/api/github/oauth');
 });
-
 
 app.get('/auth/github/callback', async (req, res) => {
   const query = new URLSearchParams(req.query).toString();
@@ -110,12 +118,11 @@ app.get('/auth/github/callback', async (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'Backend is running with GitHub integration!',
+    name: 'CodeMentorAI API',
     status: 'ok',
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
-      data: '/api/data',
       chat: '/api/chat',
       analyse: '/api/analyse',
       explain: '/api/explain',
@@ -125,46 +132,43 @@ app.get('/', (req, res) => {
   });
 });
 
-// Example API route for testing
-app.get('/api/data', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Example API endpoint',
-    data: {
-      timestamp: new Date().toISOString(),
-      sampleData: [
-        { id: 1, name: 'Sample Item 1' },
-        { id: 2, name: 'Sample Item 2' },
-        { id: 3, name: 'Sample Item 3' }
-      ]
-    }
-  });
-});
-
-// Health check endpoint
+// Public Health Check Endpoint (Safe, no internal credential disclosure)
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    timestamp: new Date().toISOString(),
-    groqKeySet: !!process.env.GROQ_API_KEY,
-    githubConfig: !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+    timestamp: new Date().toISOString()
   });
 });
 
-const port = process.env.PORT || 5000;
-app.listen(port, '0.0.0.0', () => {
-  console.log(`✅ Server running on port ${port}`);
-  console.log('🧠 AI Endpoints: /api/chat, /api/review, /api/analyse, /api/explain');
-  console.log('🔗 GitHub: /api/github/oauth, /api/github/repos, /api/github/analyze-file');
-  if (!process.env.GROQ_API_KEY) {
-    console.warn("WARNING: GROQ_API_KEY not set in .env! AI calls will fail.");
+// Readiness Probe
+app.get('/health/readiness', (req, res) => {
+  const isReady = !!process.env.GROQ_API_KEY;
+  if (isReady) {
+    res.json({ status: 'ready', timestamp: new Date().toISOString() });
   } else {
-    console.log("✅ Groq AI configured.");
-  }
-  if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
-    console.warn("WARNING: GITHUB_CLIENT_ID/SECRET not set! GitHub features disabled.");
-  } else {
-    console.log("✅ GitHub OAuth configured.");
+    res.status(503).json({ status: 'not_ready', message: 'Groq API Key unconfigured' });
   }
 });
 
+// Global Express Error Middleware
+app.use((err, req, res, next) => {
+  console.error('❌ Express Error Handler caught:', err.message);
+  const status = err.status || (err.type === 'entity.too.large' ? 413 : 500);
+  const message = err.type === 'entity.too.large' 
+    ? 'Request payload too large. Maximum size allowed is 2MB.' 
+    : err.message || 'Internal Server Error';
+
+  res.status(status).json({
+    error: message,
+    code: err.code || (status === 413 ? 'PAYLOAD_TOO_LARGE' : 'INTERNAL_SERVER_ERROR')
+  });
+});
+
+if (require.main === module) {
+  const port = process.env.PORT || 5000;
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`✅ CodeMentorAI Backend running on port ${port}`);
+  });
+}
+
+module.exports = app; // Export for testing

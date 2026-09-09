@@ -1,5 +1,9 @@
 require("dotenv").config();
 const OpenAI = require("openai");
+const { buildChatPrompt, buildReviewPrompt, buildSecurityPrompt, buildPerformancePrompt, buildPatchPrompt } = require("./ai/promptService");
+const { sanitizeChatResponse, sanitizeReviewResponse, sanitizeSecurityResponse, sanitizePerformanceResponse, sanitizePatchResponse } = require("./ai/responseValidator");
+const { redactSecrets } = require("./repository/secretDetector");
+const { buildContext } = require("./repository/contextBuilder");
 
 const openai = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
@@ -22,449 +26,37 @@ async function safeJsonParse(content, fallback) {
     m = text.match(/```\s*\n([\s\S]*?)\n\s*```/i);
     if (m && m[1]) candidates.push(m[1].trim());
 
-    // Full content if JSON-like - try this first as it's most likely.
+    // Full content if JSON-like
     const trimmed = text.trim();
     if (trimmed.startsWith('{')) {
       candidates.push(trimmed);
     }
 
-    // Dedupe, sort largest first, top 3
     const unique = [...new Set(candidates)].sort((a, b) => b.length - a.length).slice(0, 3);
     return unique;
   }
 
-  function stripJsonComments(jsonString) {
-    let result = '';
-    let inString = false;
-    let isEscaped = false;
-    let inLineComment = false;
-    let inBlockComment = false;
-
-    for (let i = 0; i < jsonString.length; i++) {
-      const char = jsonString[i];
-      const next = jsonString[i + 1];
-
-      if (inLineComment) {
-        if (char === '\n' || char === '\r') {
-          inLineComment = false;
-          result += char;
-        }
-        continue;
-      }
-
-      if (inBlockComment) {
-        if (char === '*' && next === '/') {
-          inBlockComment = false;
-          i++;
-        }
-        continue;
-      }
-
-      if (inString) {
-        result += char;
-        if (isEscaped) {
-          isEscaped = false;
-        } else if (char === '\\') {
-          isEscaped = true;
-        } else if (char === '"') {
-          inString = false;
-        }
-        continue;
-      }
-
-      if (char === '"') {
-        inString = true;
-        result += char;
-        continue;
-      }
-
-      if (char === '/' && next === '/') {
-        inLineComment = true;
-        i++;
-        continue;
-      }
-
-      if (char === '/' && next === '*') {
-        inBlockComment = true;
-        i++;
-        continue;
-      }
-
-      result += char;
-    }
-
-    return result;
-  }
-
-  function convertBacktickValuesToJsonStrings(text) {
-    let result = '';
-    let inDoubleString = false;
-    let isEscaped = false;
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-
-      if (inDoubleString) {
-        result += char;
-        if (isEscaped) {
-          isEscaped = false;
-        } else if (char === '\\') {
-          isEscaped = true;
-        } else if (char === '"') {
-          inDoubleString = false;
-        }
-        continue;
-      }
-
-      if (char === '"') {
-        inDoubleString = true;
-        result += char;
-        continue;
-      }
-
-      if (char === ':' ) {
-        result += char;
-
-        let j = i + 1;
-        while (j < text.length && /\s/.test(text[j])) {
-          result += text[j];
-          j++;
-        }
-
-        if (text[j] === '`') {
-          j++;
-          let backtickContent = '';
-          let backtickEscaped = false;
-
-          while (j < text.length) {
-            const btChar = text[j];
-            if (backtickEscaped) {
-              backtickContent += btChar;
-              backtickEscaped = false;
-              j++;
-              continue;
-            }
-
-            if (btChar === '\\') {
-              backtickContent += btChar;
-              backtickEscaped = true;
-              j++;
-              continue;
-            }
-
-            if (btChar === '`') {
-              break;
-            }
-
-            backtickContent += btChar;
-            j++;
-          }
-
-          if (j < text.length && text[j] === '`') {
-            result += JSON.stringify(backtickContent);
-            i = j;
-            continue;
-          }
-
-          // No matching closing backtick: keep original text from this point.
-          result += '`' + backtickContent;
-          i = j - 1;
-          continue;
-        }
-
-        i = j - 1;
-        continue;
-      }
-
-      result += char;
-    }
-
-    return result;
-  }
-
-  function removeTrailingCommas(jsonString) {
-    let result = '';
-    let inString = false;
-    let isEscaped = false;
-
-    for (let i = 0; i < jsonString.length; i++) {
-      const char = jsonString[i];
-
-      if (inString) {
-        result += char;
-        if (isEscaped) {
-          isEscaped = false;
-        } else if (char === '\\') {
-          isEscaped = true;
-        } else if (char === '"') {
-          inString = false;
-        }
-        continue;
-      }
-
-      if (char === '"') {
-        inString = true;
-        result += char;
-        continue;
-      }
-
-      if (char === ',') {
-        let j = i + 1;
-        while (j < jsonString.length && /\s/.test(jsonString[j])) {
-          j++;
-        }
-        if (jsonString[j] === '}' || jsonString[j] === ']') {
-          continue;
-        }
-      }
-
-      result += char;
-    }
-
-    return result;
-  }
-
-  function cleanControlCharacters(jsonString) {
-    return jsonString.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ');
-  }
-
-  function escapeInvalidStringControls(jsonString) {
-    let result = '';
-    let inString = false;
-    let isEscaped = false;
-
-    for (let i = 0; i < jsonString.length; i++) {
-      const char = jsonString[i];
-
-      if (!inString) {
-        if (char === '"') {
-          inString = true;
-        }
-        result += char;
-        continue;
-      }
-
-      if (isEscaped) {
-        result += char;
-        isEscaped = false;
-        continue;
-      }
-
-      if (char === '\\') {
-        result += char;
-        isEscaped = true;
-        continue;
-      }
-
-      if (char === '"') {
-        inString = false;
-        result += char;
-        continue;
-      }
-
-      // JSON strings cannot contain raw control characters.
-      if (char === '\n') {
-        result += '\\n';
-        continue;
-      }
-      if (char === '\r') {
-        result += '\\r';
-        continue;
-      }
-      if (char === '\t') {
-        result += '\\t';
-        continue;
-      }
-
-      const code = char.charCodeAt(0);
-      if (code < 32 || code === 127) {
-        result += ' ';
-        continue;
-      }
-
-      result += char;
-    }
-
-    return result;
-  }
-
-  function extractFirstBalancedObject(text) {
-    let inString = false;
-    let isEscaped = false;
-    let braceCount = 0;
-    let start = -1;
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-
-      if (inString) {
-        if (isEscaped) {
-          isEscaped = false;
-        } else if (char === '\\') {
-          isEscaped = true;
-        } else if (char === '"') {
-          inString = false;
-        }
-        continue;
-      }
-
-      if (char === '"') {
-        inString = true;
-        continue;
-      }
-
-      if (char === '{') {
-        if (braceCount === 0) {
-          start = i;
-        }
-        braceCount++;
-        continue;
-      }
-
-      if (char === '}') {
-        if (braceCount > 0) {
-          braceCount--;
-          if (braceCount === 0 && start !== -1) {
-            return text.substring(start, i + 1).trim();
-          }
-        }
-      }
-    }
-
-    return null;
-  }
-
-  function looksLikeObjectFragment(text) {
-    const trimmed = text.trim();
-    if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      return false;
-    }
-    return /^"[^"]+"\s*:/.test(trimmed);
-  }
-
-  function normalizeJsonCandidate(input) {
-    return cleanControlCharacters(
-      escapeInvalidStringControls(
-        removeTrailingCommas(stripJsonComments(convertBacktickValuesToJsonStrings(input.trim())))
-      )
-    ).trim();
-  }
-
-  function recoverFromExpectedKeys(text, template) {
-    const expectedKeys = Object.keys(template);
-    if (expectedKeys.length === 0) {
-      return null;
-    }
-
-    const keyLocations = [];
-    for (const key of expectedKeys) {
-      const re = new RegExp(`"${escapeRegExp(key)}"\\s*:`, 'g');
-      const match = re.exec(text);
-      if (match) {
-        keyLocations.push({ key, index: match.index, matchLength: match[0].length });
-      }
-    }
-
-    if (keyLocations.length === 0) {
-      return null;
-    }
-
-    keyLocations.sort((a, b) => a.index - b.index);
-    const recovered = {};
-
-    for (let i = 0; i < keyLocations.length; i++) {
-      const current = keyLocations[i];
-      const valueStart = current.index + current.matchLength;
-      const valueEnd = i < keyLocations.length - 1 ? keyLocations[i + 1].index : text.length;
-      let rawValue = text.substring(valueStart, valueEnd).trim();
-
-      if (!rawValue) {
-        continue;
-      }
-
-      rawValue = rawValue.replace(/^[,\s]+/, '').replace(/[\s,]+$/, '').trim();
-      if (!rawValue) {
-        continue;
-      }
-
-      // Remove any trailing object terminator from a sliced segment.
-      rawValue = rawValue.replace(/\}\s*$/, '').trim();
-
-      try {
-        recovered[current.key] = JSON.parse(rawValue);
-        continue;
-      } catch {
-        // Fall through to lenient string extraction.
-      }
-
-      if (rawValue.startsWith('"')) {
-        let valueBody = rawValue.slice(1);
-
-        let closingIndex = -1;
-        let isEscaped = false;
-        for (let j = 0; j < valueBody.length; j++) {
-          const ch = valueBody[j];
-          if (isEscaped) {
-            isEscaped = false;
-            continue;
-          }
-          if (ch === '\\') {
-            isEscaped = true;
-            continue;
-          }
-          if (ch === '"') {
-            closingIndex = j;
-            break;
-          }
-        }
-
-        if (closingIndex >= 0) {
-          valueBody = valueBody.slice(0, closingIndex);
-        }
-
-        valueBody = valueBody.replace(/\\"/g, '"');
-        valueBody = valueBody.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
-        valueBody = valueBody.replace(/[\s,]+$/, '');
-        recovered[current.key] = valueBody;
-      }
-    }
-
-    return Object.keys(recovered).length ? { ...template, ...recovered } : null;
-  }
-
   const candidates = extractJsonCandidates(content);
-  console.log(`🔍 JSON candidates: ${candidates.length} (content: ${content.length} chars)`);
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     try {
-      // Robust cleaning
       let cleaned = candidate
-        .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '') // comments
+        .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')
         .replace(/\s+/g, ' ')
-        .replace(/,\s*([}\]])/g, '$1') // trailing commas
+        .replace(/,\s*([}\]])/g, '$1')
         .trim();
 
       const parsed = JSON.parse(cleaned);
 
-      // Quick schema check - must have some expected fields from fallback
       if (Object.keys(fallback).some(key => parsed.hasOwnProperty(key))) {
-        console.log(`✅ Parsed successfully on attempt ${i + 1}`);
         return parsed;
       }
-    } catch (e) {
-      console.log(`⏭️ Attempt ${i + 1} failed: ${e.message.substring(0, 50)}`);
+    } catch {
+      // Continue to next candidate
     }
   }
 
-  // Final recovery path for truncated/malformed model output.
-  const keyRecovered = recoverFromExpectedKeys(content, fallback);
-  if (keyRecovered) {
-    console.warn('⚠️ Parsed using expected-key recovery fallback');
-    return keyRecovered;
-  }
-
-  console.error(`❌ All parse attempts (${candidates.length}) failed. Using fallback. Raw sample:`, content.substring(0, 200) + '...');
   return fallback;
 }
 
@@ -478,55 +70,93 @@ function logGroqError(error) {
     message: error.message,
     status: error.status,
     timestamp: new Date().toISOString(),
-    failed_generation: error.response?.error?.failed_generation,
-    response: error.response?.data || error.response
   }, null, 2));
 }
 
-async function createGroqCompletion(messages) {
-  try {
-    return await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      response_format: { type: "json_object" },
-      messages
-    });
-  } catch (error) {
-    if (!isGroqJsonGenerationError(error)) {
-      throw error;
-    }
-
-    console.warn('⚠️ Groq JSON mode failed; retrying without response_format');
-    return openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages
-    });
-  }
+function getGroqModel() {
+  return process.env.GROQ_MODEL || "llama-3.1-8b-instant";
 }
 
-async function chatWithAI(message, code, language) {
-  const systemPrompt = `You are a senior software engineer and mentor.
+async function createGroqCompletion(messages, retries = 2) {
+  const model = getGroqModel();
+  let lastError = null;
 
-Help the user by:
-- Explaining concepts clearly
-- Debugging code
-- Suggesting improvements
-- Giving optimized solutions
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutMs = Number(process.env.GROQ_TIMEOUT_MS || 15000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-IMPORTANT: Return ONLY valid JSON (no markdown, no code blocks, no extra text):
-{
-  "reply": "your response",
-  "fix": "suggested fix explanation",
-  "improved_code": "full improved code block"
-}`;
+    try {
+      const response = await openai.chat.completions.create(
+        {
+          model,
+          response_format: { type: "json_object" },
+          messages,
+        },
+        { signal: controller.signal }
+      );
+      clearTimeout(timer);
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
 
-  const userPrompt = `Question: ${message}
+      if (isGroqJsonGenerationError(error)) {
+        try {
+          return await openai.chat.completions.create({
+            model,
+            messages,
+          });
+        } catch (retryErr) {
+          lastError = retryErr;
+        }
+      }
 
-Language: ${language || "not specified"}
+      const isTransient =
+        error.name === 'AbortError' ||
+        error.status === 429 ||
+        (error.status && error.status >= 500);
 
-Code:
-\`\`\`
-${code || "No code provided"}
-\`\`\``;
+      if (isTransient && attempt < retries) {
+        const backoff = (attempt + 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  throw lastError;
+}
+
+async function chatWithAI(message, code, language, options = {}) {
+  const { mode = 'developer', scope = 'current_file', index = null, selectedFiles = [], currentFilePath = '' } = options;
+
+  let contextInfo;
+  if (code && !options.contextText) {
+    contextInfo = buildContext({
+      scope: 'current_file',
+      currentFile: { path: currentFilePath || 'file.js', content: code },
+      userQuery: message,
+    });
+  } else if (index || selectedFiles.length > 0) {
+    contextInfo = buildContext({
+      scope: index ? 'indexed_repo' : 'selected_files',
+      selectedFiles,
+      index,
+      userQuery: message,
+    });
+  } else {
+    contextInfo = buildContext({ scope: 'no_context', userQuery: message });
+  }
+
+  const { systemPrompt, userPrompt } = buildChatPrompt({
+    message,
+    mode,
+    context: contextInfo.contextText,
+    citedFiles: contextInfo.citedFiles,
+  });
 
   try {
     const response = await createGroqCompletion([
@@ -535,39 +165,27 @@ ${code || "No code provided"}
     ]);
 
     const content = response.choices[0].message.content;
-    return safeJsonParse(content, { reply: "AI service error", fix: "", improved_code: "" });
+    const parsed = await safeJsonParse(content, { reply: "AI service error", cited_files: [], fix: "", improved_code: "" });
+    return sanitizeChatResponse(parsed, { reply: "AI service error", cited_files: contextInfo.citedFiles, fix: "", improved_code: "" });
   } catch (error) {
     logGroqError(error);
     if (error.status === 401) {
-      throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
+      throw new Error("401 Incorrect API key. Check GROQ_API_KEY in .env");
     }
     throw new Error(`AI service failed: ${error.message}`);
   }
 }
 
 async function explainCode(code, language) {
-  const systemPrompt = `You are an expert code explainer.
-
-Explain the provided code step by step:
-- What it does overall
-- Key functions/algorithms
-- Data flow
-- Potential issues/improvements
-
-IMPORTANT: Return ONLY valid JSON (no markdown, no code blocks, no extra text):
+  const redacted = redactSecrets(code || '');
+  const systemPrompt = `You are an expert code explainer. Explain provided code step by step. Return ONLY valid JSON:
 {
   "explanation": "detailed step-by-step explanation",
   "key_concepts": ["list", "of", "concepts"],
   "improvements": "suggested enhancements"
 }`;
 
-  const userPrompt = `Explain this code:
-
-Language: ${language || "unknown"}
-
-\`\`\`
-${code}
-\`\`\``;
+  const userPrompt = `Explain this code:\nLanguage: ${language || "unknown"}\n\n\`\`\`\n${redacted}\n\`\`\``;
 
   try {
     const response = await createGroqCompletion([
@@ -579,38 +197,20 @@ ${code}
     return safeJsonParse(content, { explanation: "Explanation unavailable", key_concepts: [], improvements: "" });
   } catch (error) {
     logGroqError(error);
-    if (error.status === 401) {
-      throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
-    }
     throw new Error(`AI service failed: ${error.message}`);
   }
 }
 
 async function analyseCode(code, language, issue) {
-  const systemPrompt = `You are an expert code debugger and analyzer.
-
-Analyze the code for:
-- Bugs/errors
-- Performance issues
-- Best practices violations
-- Security vulnerabilities
-
-Provide fixes.
-
-IMPORTANT: Return ONLY valid JSON (no markdown, no code blocks, no extra text):
+  const redacted = redactSecrets(code || '');
+  const systemPrompt = `You are an expert code debugger and analyzer. Analyze code for bugs, performance issues, and security vulnerabilities. Return ONLY valid JSON:
 {
   "analysis": "detailed issues found",
   "fixes": "step-by-step fixes",
   "fixed_code": "complete corrected code"
 }`;
 
-  const userPrompt = `Analyze and fix this code. Issue reported: ${issue || "general review"}
-
-Language: ${language || "unknown"}
-
-\`\`\`
-${code}
-\`\`\``;
+  const userPrompt = `Analyze and fix this code. Issue reported: ${issue || "general review"}\nLanguage: ${language || "unknown"}\n\n\`\`\`\n${redacted}\n\`\`\``;
 
   try {
     const response = await createGroqCompletion([
@@ -622,51 +222,13 @@ ${code}
     return safeJsonParse(content, { analysis: "Analysis unavailable", fixes: "", fixed_code: code });
   } catch (error) {
     logGroqError(error);
-    if (error.status === 401) {
-      throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
-    }
     throw new Error(`AI service failed: ${error.message}`);
   }
 }
 
-async function reviewCode(code, language) {
-  const systemPrompt = `You are an expert code reviewer and senior engineer.
-
-Perform a comprehensive code review including:
-- Code quality score (0-100)
-- Issues categorized by type (bug, performance, security, style, best practices) and severity (low/medium/high/critical)
-- Actionable fix suggestions
-- Refactoring opportunities
-- Overall architecture feedback
-- Readability and maintainability assessment
-
-Language: ${language || 'unknown'}
-
-IMPORTANT: Return ONLY valid JSON (no markdown, no code blocks, no extra text):
-{
-  "score": 95,
-  "summary": "Overall review summary",
-  "issues": [
-    {
-      "type": "performance",
-      "severity": "medium",
-      "line": 42,
-      "description": "Issue description",
-      "fix": "Suggested fix code or explanation"
-    }
-  ],
-  "improvements": ["List of general improvements"],
-  "reviewed_code": "Original code with inline review comments",
-  "refactored_code": "Fully refactored/improved code version"
-}`;
-
-  const userPrompt = `Review this code comprehensively:
-
-Language: ${language || "unknown"}
-
-\`\`\`
-${code}
-\`\`\``;
+async function reviewCode(code, language, filePath = '') {
+  const redacted = redactSecrets(code || '', filePath);
+  const { systemPrompt, userPrompt } = buildReviewPrompt({ code: redacted, language, filePath });
 
   try {
     const response = await createGroqCompletion([
@@ -675,14 +237,77 @@ ${code}
     ]);
 
     const content = response.choices[0].message.content;
-    return safeJsonParse(content, { score: 0, summary: "Review unavailable", issues: [], improvements: [], reviewed_code: code, refactored_code: code });
+    const parsed = await safeJsonParse(content, { score: 75, summary: "Review unavailable", issues: [], improvements: [], refactored_code: code });
+    return sanitizeReviewResponse(parsed, code);
   } catch (error) {
     logGroqError(error);
-    if (error.status === 401) {
-      throw new Error("401 Incorrect API key. Check GROQ_API_KEY (should start with gsk_) in .env");
-    }
     throw new Error(`AI service failed: ${error.message}`);
   }
 }
 
-module.exports = { chatWithAI, explainCode, analyseCode, reviewCode };
+async function generateSecurityAudit(code, filePath = '') {
+  const redacted = redactSecrets(code || '', filePath);
+  const { systemPrompt, userPrompt } = buildSecurityPrompt({ code: redacted, filePath });
+
+  try {
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
+
+    const content = response.choices[0].message.content;
+    const parsed = await safeJsonParse(content, { summary: "Audit complete", findings: [] });
+    return sanitizeSecurityResponse(parsed);
+  } catch (error) {
+    logGroqError(error);
+    throw new Error(`Security audit failed: ${error.message}`);
+  }
+}
+
+async function generatePerformanceAudit(code, filePath = '') {
+  const redacted = redactSecrets(code || '', filePath);
+  const { systemPrompt, userPrompt } = buildPerformancePrompt({ code: redacted, filePath });
+
+  try {
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
+
+    const content = response.choices[0].message.content;
+    const parsed = await safeJsonParse(content, { summary: "Performance complete", findings: [] });
+    return sanitizePerformanceResponse(parsed);
+  } catch (error) {
+    logGroqError(error);
+    throw new Error(`Performance audit failed: ${error.message}`);
+  }
+}
+
+async function generateFixPatch({ filePath, originalCode, issueDescription, requestedFix }) {
+  const redacted = redactSecrets(originalCode || '', filePath);
+  const { systemPrompt, userPrompt } = buildPatchPrompt({ filePath, originalCode: redacted, issueDescription, requestedFix });
+
+  try {
+    const response = await createGroqCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ]);
+
+    const content = response.choices[0].message.content;
+    const parsed = await safeJsonParse(content, { filePath, reason: issueDescription, risk: 'Low', proposedCode: originalCode, explanation: '' });
+    return sanitizePatchResponse(parsed, originalCode, filePath);
+  } catch (error) {
+    logGroqError(error);
+    throw new Error(`Patch generation failed: ${error.message}`);
+  }
+}
+
+module.exports = {
+  chatWithAI,
+  explainCode,
+  analyseCode,
+  reviewCode,
+  generateSecurityAudit,
+  generatePerformanceAudit,
+  generateFixPatch,
+};

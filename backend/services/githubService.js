@@ -143,12 +143,11 @@ async function getRepository(sessionId, owner, repo) {
   };
 }
 
-// GET repo files/tree (top-level + recursive simple)
+// GET repo files/tree (with truncation protection & limits)
 async function getRepoFiles(sessionId, repo) {
   const octokit = getOctokit(sessionId);
   const { owner, repo: repoName } = parseRepoFullName(repo);
 
-  // Resolve the default branch commit, then fetch its tree recursively.
   const { data: repoData } = await octokit.rest.repos.get({ owner, repo: repoName });
   const defaultBranch = repoData.default_branch || 'main';
 
@@ -181,14 +180,18 @@ async function getRepoFiles(sessionId, repo) {
     recursive: 'true',
   });
 
-  if (tree.truncated) {
-    throw new Error('Repository tree is too large to fetch recursively. Please narrow the repository or review files individually.');
-  }
+  const MAX_FILES = 2000;
+  const IGNORED_DIRS = ['node_modules/', '.git/', 'dist/', 'build/', '.next/', 'vendor/'];
 
-  return tree.tree
-    .filter(node => node.type === 'blob') // files only
+  const filtered = tree.tree
+    .filter(node => node.type === 'blob')
+    .filter(file => !IGNORED_DIRS.some(dir => file.path.includes(dir)))
     .map(file => ({ path: file.path, type: file.mode === '100644' ? 'file' : 'exec', sha: file.sha }))
     .sort((a, b) => a.path.localeCompare(b.path));
+
+  const resultFiles = filtered.slice(0, MAX_FILES);
+
+  return resultFiles;
 }
 
 // GET file content

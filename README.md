@@ -1,22 +1,26 @@
-# CodeMentor AI - AI-Powered Code Review & Mentorship Platform
+# CodeMentor AI — React + Vite AI Code Review Platform
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-yellow.svg)](https://opensource.org/licenses/ISC)
 [![Backend](https://img.shields.io/badge/Backend-Node.js%20%7C%20Express-blue.svg)](https://nodejs.org/)
-[![Frontend](https://img.shields.io/badge/Frontend-HTML%20CSS%20JS-green.svg)](https://developer.mozilla.org/en-US/docs/Web)
+[![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite-61dafb.svg)](https://react.dev/)
 [![AI](https://img.shields.io/badge/AI-Groq-orange.svg)](https://console.groq.com/)
 
 ## Overview
 
-CodeMentor AI is an AI-powered code mentorship platform that provides instant code reviews, bug detection, refactoring suggestions, and performance analysis. You can paste code directly or connect a GitHub repository and get feedback like working with a senior developer.
+CodeMentor AI is a modern AI-powered code review and mentorship platform built as a **React + Vite Single-Page Application (SPA)** with an Express backend. It provides instant code quality scoring, bug detection, refactoring suggestions, and deep repository file analysis via **GitHub OAuth** and the **Groq API** (`llama-3.1-8b-instant`).
 
-### Key Features
+---
 
-- AI code review with bug detection and suggestions
-- Code quality scores with actionable insights
-- Multi-language support for JavaScript, Python, Java, TypeScript, C++, Go, and more
-- Real-time feedback for faster iteration
-- Performance analysis with optimization recommendations
-- GitHub integration for repository browsing and review
+## Key Features
+
+- **React + Vite SPA Architecture:** High-performance, componentized developer tool interface.
+- **Dark-First Technical Visual System:** Restrained, developer-centric UI/UX inspired by Vercel, Linear, and Cursor.
+- **AI Code Review Workbench:** Code quality rating (0-100), severity-tagged issue cards, and refactored code blocks.
+- **GitHub Repository Workspace:** Interactive directory file tree browser and single-file AI review tools.
+- **Floating AI Assistant Widget:** Instant code Q&A, inline code fix cards, and secure React rendering.
+- **Centralized API Layer & State:** Unified HTTP adapter (`api.js`) and `GithubAuthContext` with normalized backend responses.
+
+---
 
 ## Quick Start
 
@@ -28,142 +32,72 @@ CodeMentor AI is an AI-powered code mentorship platform that provides instant co
 ### Run Locally
 
 ```bash
-npm run setup:backend
+npm run setup
 npm run dev
 ```
 
-The backend runs on `http://localhost:5000` and the frontend runs on `http://localhost:5500`.
+- **React + Vite Frontend:** `http://localhost:5500`
+- **Express Backend Server:** `http://localhost:5000`
 
-If you want to open pages directly, use `frontend/index.html` for the landing page and `frontend/review.html` for the review interface.
-
-### Health Check
-
-```bash
-curl http://localhost:5000/health
-```
-
-### Environment Variables
-
-Copy `backend/.env.example` to `backend/.env` and set the values you need:
+### Build for Production
 
 ```bash
-GROQ_API_KEY=your_groq_api_key_here
-GITHUB_CLIENT_ID=your_github_client_id_here
-GITHUB_CLIENT_SECRET=your_github_client_secret_here
-GITHUB_CALLBACK_URL=http://localhost:5000/auth/github/callback
-FRONTEND_URL=http://localhost:5500
-PORT=5000
-SESSION_SECRET=change_me_for_dev
+npm run build:frontend
 ```
 
-## API Endpoints
-
-- `POST /api/review` - AI code review and quality score. Body: `{ code, language }`
-- `POST /api/chat` - AI chat for coding questions. Body: `{ message }`
-- `POST /api/analyse` - Deep code analysis. Body: `{ code }`
-- `POST /api/explain` - Explain code functionality. Body: `{ code }`
-- `GET /health` - Health check.
-
-### Example Review Request
-
-```bash
-curl -X POST http://localhost:5000/api/review \
-  -H "Content-Type: application/json" \
-  -d '{"code":"function twoSum(nums, target) { const map = {}; ... }","language":"javascript"}'
-```
+---
 
 ## Project Structure
 
 ```text
-e:/CodeMentorAI/
-├── backend/                 # Node.js/Express API server
-│   ├── index.js             # Main server entry
-│   ├── package.json         # Backend dependencies
-│   ├── routes/              # API routes
-│   └── services/            # AI and GitHub service integrations
-└── frontend/                # Static web app
-    ├── index.html           # Landing page
-    ├── review.html          # Code review interface
-    ├── docs.html            # Documentation
-    ├── styles.css           # Global styles
-    ├── script.js            # Frontend logic
-    ├── review.js            # Review page logic
-    └── docs.css             # Docs styles
+e:/Projects/CodeMentorAI/
+├── package.json                    # Workspace dev launcher & scripts
+├── scripts/dev.js                  # Concurrent dev runner (Vite + Node)
+├── backend/                        # Node.js/Express API server
+│   ├── index.js                    # Express server entry point
+│   ├── routes/                     # API routes (/api/review, /api/chat, /api/github)
+│   └── services/                   # Groq AI & Octokit integration
+└── frontend/                       # React + Vite SPA
+    ├── vite.config.js              # Vite configuration with Express proxy
+    ├── index.html                  # App root HTML
+    └── src/
+        ├── main.jsx                # React root entry
+        ├── App.jsx                 # Router & Top-Level Error Boundary
+        ├── styles/                 # Design tokens (tokens.css, globals.css)
+        ├── services/               # API client & AI/GitHub adapters
+        ├── context/                # GithubAuthContext & ThemeContext
+        ├── components/
+        │   ├── ui/                 # Button, Input, Card, Badge, Modal, Skeleton
+        │   ├── layout/             # AppShell, Sidebar, TopBar, MobileNavigation
+        │   ├── code/               # CodeEditor, CodeViewer, LanguageSelector
+        │   ├── review/             # ReviewWorkspace, ScoreCard, IssueList
+        │   ├── github/             # RepositoryList, FileTree, FileViewer
+        │   └── chat/               # ChatWidget, ChatMessage, CodeFixCard
+        └── pages/
+            ├── HomePage.jsx        # Developer Dashboard
+            ├── ReviewPage.jsx      # Code Review Workbench
+            ├── WorkspacePage.jsx   # GitHub Repo Workbench
+            ├── DocsPage.jsx        # API Documentation
+            └── Github*.jsx         # OAuth Callback & Status pages
 ```
+
+---
 
 ## Tech Stack
 
-### Backend Stack
-
-- Node.js and Express.js
-- Groq AI integration through the OpenAI SDK
-- CORS for frontend access
-- dotenv for environment configuration
-
 ### Frontend Stack
+- **Framework:** React 18 & React Router DOM v6
+- **Build Tool:** Vite 5
+- **Icons:** Lucide React
+- **Design System:** Dark-first CSS Variables / Design Tokens
 
-- Vanilla HTML, CSS, and JavaScript
-- JetBrains Mono and Inter fonts
-- Responsive layout with code review and repository browsing views
+### Backend Stack
+- **Runtime:** Node.js & Express.js
+- **AI Integration:** Groq API (`llama-3.1-8b-instant`) via OpenAI SDK
+- **GitHub Integration:** Octokit REST API & GitHub OAuth 2.0
 
-### Dependencies
-
-```bash
-npm i express cors dotenv openai
-npm i -D nodemon
-```
-
-## Features Showcase
-
-1. Landing page in `index.html` with a hero section, features, testimonials, and demo content.
-2. Code review in `review.html` with AI analysis and refactoring output.
-3. Documentation in `docs.html` with usage guidance.
-4. Mobile-friendly layouts throughout the app.
-
-## Usage Examples
-
-### Code Review Example
-
-```javascript
-function findDuplicates(arr) {
-  return arr.filter((item, index) => arr.indexOf(item) === index);
-}
-```
-
-### Frontend Integration
-
-The review page includes:
-
-- Syntax-highlighted code editor
-- Language selection
-- Instant AI feedback
-- Copy and export actions
-
-## Contributing
-
-1. Fork the repository.
-2. Create a feature branch with `git checkout -b feature/amazing-feature`.
-3. Commit your changes with `git commit -m 'Add amazing feature'`.
-4. Push the branch with `git push origin feature/amazing-feature`.
-5. Open a pull request.
+---
 
 ## License
 
 This project is licensed under the ISC license.
-
-## Acknowledgments
-
-- Groq for AI capabilities
-- Shivam Maurya for the original project
-
-## Next Steps
-
-- GitHub integration improvements
-- User authentication
-- Code snippet history
-- VS Code extension
-- Docker deployment
-
-## Built With Care
-
-Star this repository if you find it useful.
