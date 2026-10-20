@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, Github, Code, FolderGit2, Shield, Activity, BookOpen, ExternalLink, Heart } from 'lucide-react';
+import { Sparkles, Github, Code, FolderGit2, Shield, Activity, ExternalLink, Heart } from 'lucide-react';
 import { Badge } from '../ui/Card';
 import { useGithubAuth } from '../../context/GithubAuthContext';
 
@@ -124,26 +124,20 @@ export function Footer() {
             </nav>
           </div>
 
-          {/* Column 3: Documentation & Help */}
+          {/* Column 3: Community & Resources */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             <h4 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--fw-bold)', color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Resources
+              Community
             </h4>
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }} aria-label="Resource links">
-              <Link to="/docs" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
-                Documentation Hub
-              </Link>
-              <a href="/docs#getting-started" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
-                Quick Start Guide
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }} aria-label="Community links">
+              <a href="https://github.com/shivammaurya2903/CodeMentorAI" target="_blank" rel="noreferrer" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
+                GitHub Repository
               </a>
-              <a href="/docs#developer-guide" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
-                Developer API Guide
+              <a href="https://github.com/shivammaurya2903/CodeMentorAI/issues" target="_blank" rel="noreferrer" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
+                Issue Tracker
               </a>
-              <a href="/docs#troubleshooting" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
-                Troubleshooting & Errors
-              </a>
-              <a href="/docs#faq" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
-                Frequently Asked Questions
+              <a href="https://github.com/shivammaurya2903/CodeMentorAI/releases" target="_blank" rel="noreferrer" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
+                Releases & Changelog
               </a>
             </nav>
           </div>
@@ -180,12 +174,6 @@ export function Footer() {
                   <Github size={16} /> Connect GitHub OAuth
                 </button>
               )}
-              <a href="/docs#security-privacy" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
-                Security & Code Privacy
-              </a>
-              <a href="/docs#environment-variables" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }} className="c-footer-link">
-                Environment Setup
-              </a>
             </nav>
           </div>
         </div>
@@ -209,12 +197,6 @@ export function Footer() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-            <Link to="/docs#security-privacy" style={{ color: 'var(--text-dim)' }} className="c-footer-link">
-              Privacy Policy
-            </Link>
-            <Link to="/docs#getting-started" style={{ color: 'var(--text-dim)' }} className="c-footer-link">
-              Terms of Service
-            </Link>
             <a
               href="https://github.com/shivammaurya2903/CodeMentorAI"
               target="_blank"

@@ -7,7 +7,6 @@ import {
   Shield,
   Activity,
   Sparkles,
-  BookOpen,
   Github,
   Sun,
   Moon,
@@ -29,7 +28,6 @@ export function Sidebar({ collapsed = false }) {
     { to: '/security', label: 'Security Engine', icon: Shield },
     { to: '/health', label: 'Health Scorecard', icon: Activity },
     { to: '/improve-plan', label: 'Improvement Plan', icon: Sparkles },
-    { to: '/docs', label: 'Docs', icon: BookOpen },
   ];
 
   return (

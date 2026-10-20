@@ -10,7 +10,6 @@ import { WorkspacePage } from './pages/WorkspacePage';
 import { HealthDashboardPage } from './pages/HealthDashboardPage';
 import { SecurityPage } from './pages/SecurityPage';
 import { ImprovementPlanPage } from './pages/ImprovementPlanPage';
-import { DocsPage } from './pages/DocsPage';
 import { GithubCallbackPage } from './pages/GithubCallbackPage';
 import { GithubSuccessPage } from './pages/GithubSuccessPage';
 import { GithubErrorPage } from './pages/GithubErrorPage';
@@ -108,14 +107,6 @@ export function App() {
                   </AppShell>
                 }
               />
-              <Route
-                path="/docs"
-                element={
-                  <AppShell pageTitle="Documentation">
-                    <DocsPage />
-                  </AppShell>
-                }
-              />
 
               {/* GitHub OAuth Flow Routes */}
               <Route path="/auth/github/callback" element={<GithubCallbackPage />} />
@@ -127,7 +118,6 @@ export function App() {
               <Route path="/index.html" element={<Navigate to="/" replace />} />
               <Route path="/review.html" element={<Navigate to="/review" replace />} />
               <Route path="/repo-review.html" element={<Navigate to="/workspace" replace />} />
-              <Route path="/docs.html" element={<Navigate to="/docs" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

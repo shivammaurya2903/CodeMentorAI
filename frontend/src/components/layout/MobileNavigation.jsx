@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { X, LayoutDashboard, Code, FolderGit2, Shield, Activity, Sparkles, BookOpen, Github, LogOut } from 'lucide-react';
+import { X, LayoutDashboard, Code, FolderGit2, Shield, Activity, Sparkles, Github, LogOut } from 'lucide-react';
 import { useGithubAuth } from '../../context/GithubAuthContext';
 import { Button, IconButton } from '../ui/Button';
 import { Badge } from '../ui/Card';
@@ -28,7 +28,6 @@ export function MobileNavigation({ isOpen, onClose }) {
     { to: '/security', label: 'Security Engine', icon: Shield },
     { to: '/health', label: 'Health Scorecard', icon: Activity },
     { to: '/improve-plan', label: 'Improvement Plan', icon: Sparkles },
-    { to: '/docs', label: 'Docs', icon: BookOpen },
   ];
 
   return (

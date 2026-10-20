@@ -54,7 +54,12 @@ export function GithubAuthProvider({ children }) {
     githubService.connectGitHub();
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await githubService.post('/api/github/logout');
+    } catch (err) {
+      console.error('Backend logout error:', err);
+    }
     setConnected(false);
     setUser(null);
     localStorage.removeItem('github_connected_cache');

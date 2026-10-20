@@ -135,7 +135,7 @@ function getFrontendBaseUrl() {
 function buildAuthRedirectPath(page, query = '') {
   const frontendBase = getFrontendBaseUrl();
   const suffix = query ? `?${query}` : '';
-  return `${frontendBase}/auth/github/${page}/index.html${suffix}`;
+  return `${frontendBase}/auth/github/${page}${suffix}`;
 }
 
 // GET /api/github/oauth - Start OAuth
@@ -333,6 +333,27 @@ router.get('/status', (req, res) => {
     connected: hasToken && !!req.session.githubConnected,
     sessionId: req.sessionID,
     hasToken,
+  });
+});
+
+// POST /api/github/logout - Full backend logout
+router.post('/logout', async (req, res) => {
+  const { removeUserToken } = require('../services/githubService');
+  const userId = req.session.userId;
+  
+  if (userId) {
+    removeUserToken(userId);
+  }
+  
+  res.clearCookie('gh_connected');
+  res.clearCookie('connect.sid');
+  
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Session destroy error:', err);
+      return res.status(500).json({ error: 'Failed to logout' });
+    }
+    res.json({ success: true });
   });
 });
 
