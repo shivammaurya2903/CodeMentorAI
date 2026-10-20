@@ -19,6 +19,13 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:5000',
           changeOrigin: true,
           secure: false,
+          // Only proxy backend auth routes; frontend handles /auth/github/success and /auth/github/error
+          bypass: (req) => {
+            const url = req.url || '';
+            if (url.includes('/github/success') || url.includes('/github/error')) {
+              return url; // Let Vite handle these frontend routes
+            }
+          },
         },
       },
     },

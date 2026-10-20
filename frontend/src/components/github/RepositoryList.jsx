@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, FolderGit2 } from 'lucide-react';
+import { Search, FolderGit2, Loader2 } from 'lucide-react';
 import { RepositoryCard } from './RepositoryCard';
 import { Input } from '../ui/Input';
 import { Skeleton, EmptyState } from '../ui/EmptyState';
@@ -13,10 +13,29 @@ export function RepositoryList({ repos = [], loading = false, onSelectRepo }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-        <Skeleton height="160px" borderRadius="var(--radius-lg)" />
-        <Skeleton height="160px" borderRadius="var(--radius-lg)" />
-        <Skeleton height="160px" borderRadius="var(--radius-lg)" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.75rem',
+            padding: '2.5rem 1rem',
+            backgroundColor: 'var(--surface-subtle)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px dashed var(--border)',
+          }}
+        >
+          <Loader2 size={24} style={{ color: 'var(--primary)', animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', fontWeight: 500 }}>
+            Fetching repositories from GitHub...
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+          <Skeleton height="160px" borderRadius="var(--radius-lg)" />
+          <Skeleton height="160px" borderRadius="var(--radius-lg)" />
+          <Skeleton height="160px" borderRadius="var(--radius-lg)" />
+        </div>
       </div>
     );
   }

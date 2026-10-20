@@ -1,9 +1,11 @@
 import React from 'react';
-import { FolderGit2, Lock, ArrowRight } from 'lucide-react';
+import { FolderGit2, Lock, ArrowRight, Star } from 'lucide-react';
 import { Card, Badge } from '../ui/Card';
 import { Button } from '../ui/Button';
 
 export function RepositoryCard({ repo, onSelect }) {
+  const starCount = repo.stargazersCount ?? repo.stargazers_count ?? repo.stars ?? 0;
+
   return (
     <Card hoverable style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1.25rem' }}>
       <div>
@@ -27,9 +29,15 @@ export function RepositoryCard({ repo, onSelect }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '0.85rem' }}>
-        <Badge variant="info" size="sm">
-          {repo.language || 'Codebase'}
-        </Badge>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <Badge variant="info" size="sm">
+            {repo.language || 'Codebase'}
+          </Badge>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 500 }}>
+            <Star size={13} style={{ color: 'var(--warning)', fill: starCount > 0 ? 'var(--warning)' : 'none' }} />
+            {starCount}
+          </span>
+        </div>
         <Button variant="secondary" size="sm" iconRight={ArrowRight} onClick={() => onSelect(repo.full_name)}>
           Inspect Workbench
         </Button>

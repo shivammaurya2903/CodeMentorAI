@@ -6,7 +6,7 @@ import { Button, IconButton } from '../ui/Button';
 import { Badge } from '../ui/Card';
 
 export function MobileNavigation({ isOpen, onClose }) {
-  const { connected, user, connectGitHub, logout } = useGithubAuth();
+  const { connected, user, login, connectGitHub, logout } = useGithubAuth();
 
   useEffect(() => {
     if (isOpen) {
@@ -121,25 +121,44 @@ export function MobileNavigation({ isOpen, onClose }) {
           {connected && user ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <img
-                  src={user.avatar_url}
-                  alt={user.login}
-                  style={{ width: '36px', height: '36px', borderRadius: '50%', border: '1px solid var(--border)' }}
-                />
+                {(user.avatarUrl || user.avatar_url) ? (
+                  <img
+                    src={user.avatarUrl || user.avatar_url}
+                    alt={user.login}
+                    style={{ width: '36px', height: '36px', borderRadius: '50%', border: '1px solid var(--border)', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--primary)',
+                      color: 'var(--text-inverse)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                  >
+                    {user.login?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                )}
                 <div>
                   <div style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--text)', fontSize: 'var(--text-base)' }}>
-                    {user.login}
+                    @{user.login}
                   </div>
                   <Badge variant="success" size="sm">Connected</Badge>
                 </div>
               </div>
               <Button variant="dangerSubtle" size="md" icon={LogOut} onClick={logout} fullWidth>
-                Disconnect GitHub
+                Logout
               </Button>
             </div>
           ) : (
-            <Button variant="primary" size="lg" icon={Github} onClick={connectGitHub} fullWidth>
-              Connect GitHub
+            <Button variant="primary" size="lg" icon={Github} onClick={login || connectGitHub} fullWidth>
+              Connect to GitHub
             </Button>
           )}
         </div>

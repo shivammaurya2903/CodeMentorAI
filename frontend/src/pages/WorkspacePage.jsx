@@ -10,6 +10,7 @@ import {
   Code,
   Bot,
   Layers,
+  CheckCircle,
 } from 'lucide-react';
 import { useGithubAuth } from '../context/GithubAuthContext';
 import { githubService } from '../services/githubService';
@@ -30,11 +31,12 @@ import { Skeleton, ErrorState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Card';
 
 export function WorkspacePage() {
-  const { connected } = useGithubAuth();
+  const { connected, user, refreshStatus, logout } = useGithubAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const repoParam = searchParams.get('repo');
 
   const [repos, setRepos] = useState([]);
+  const setRepositories = setRepos;
   const [loadingRepos, setLoadingRepos] = useState(false);
 
   const [selectedRepo, setSelectedRepo] = useState(repoParam || null);
@@ -66,25 +68,29 @@ export function WorkspacePage() {
   const [activePatch, setActivePatch] = useState(null);
   const [error, setError] = useState(null);
 
-  // Load repositories
-  const fetchRepos = useCallback(async () => {
-    if (!connected) return;
-    setLoadingRepos(true);
-    setError(null);
-    try {
-      const data = await githubService.getUserRepos();
-      setRepos(data);
-    } catch (err) {
-      // Silently handle error in production; UI displays error state
-      setError('Could not fetch GitHub repositories. Try reconnecting your GitHub account.');
-    } finally {
+  // Trigger repository fetch when connected changes
+  useEffect(() => {
+    if (connected) {
+      setLoadingRepos(true);
+      api.get('/api/github/repos')
+        .then(data => {
+          const repoList = Array.isArray(data) ? data : (data?.repos || []);
+          setRepositories(repoList);
+        })
+        .catch((err) => {
+          console.error(err);
+          if (err?.status === 401 || err?.response?.status === 401) {
+            logout();
+          }
+        })
+        .finally(() => {
+          setLoadingRepos(false);
+        });
+    } else {
+      setRepositories([]);
       setLoadingRepos(false);
     }
   }, [connected]);
-
-  useEffect(() => {
-    fetchRepos();
-  }, [fetchRepos]);
 
   // Load repo file tree & index status
   const fetchRepoFiles = useCallback(async (repoName) => {
@@ -97,17 +103,27 @@ export function WorkspacePage() {
     setAnalysisResult(null);
 
     try {
-      const tree = await githubService.getRepoFiles(repoName);
-      setFiles(tree);
+      const data = await api.get(`/api/github/repo-files?repo=${encodeURIComponent(repoName)}`);
+      const fileList = Array.isArray(data) ? data : (data?.files || []);
+      setFiles(fileList);
 
       const status = await githubService.getRepositoryStatus(repoName);
       setIndexStatus(status.indexed ? status : null);
     } catch (err) {
-      setError(err.message || 'Unable to fetch repository tree.');
+      if (
+        err?.status === 401 ||
+        err?.response?.status === 401 ||
+        String(err?.message).includes('401') ||
+        String(err?.message).toLowerCase().includes('unauthorized')
+      ) {
+        await logout();
+      } else {
+        setError(err.message || 'Unable to fetch repository tree.');
+      }
     } finally {
       setLoadingFiles(false);
     }
-  }, []);
+  }, [logout]);
 
   useEffect(() => {
     if (repoParam) {
@@ -291,6 +307,27 @@ export function WorkspacePage() {
             {selectedRepo ? selectedRepo : 'GitHub Repository Workbench'}
           </h2>
         </div>
+
+        {/* Connection status indicator */}
+        {user && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', backgroundColor: 'var(--success-subtle)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--success-border)' }}>
+            {(user.avatarUrl || user.avatar_url) ? (
+              <img src={user.avatarUrl || user.avatar_url} alt={user.login} style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'var(--text-inverse)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 'var(--text-xs)' }}>
+                {user.login?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text)' }}>
+                {user.name || user.login}
+              </span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--success)', fontWeight: 500 }}>
+                <CheckCircle size={10} style={{ display: 'inline-block', marginRight: '2px' }} /> Connected
+              </span>
+            </div>
+          </div>
+        )}
 
         {selectedRepo && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

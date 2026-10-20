@@ -1,11 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, FolderGit2, ArrowRight } from 'lucide-react';
 import { Card, Badge } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { useGithubAuth } from '../context/GithubAuthContext';
 
 export function GithubSuccessPage() {
   const navigate = useNavigate();
+  const { refreshStatus } = useGithubAuth();
+
+  useEffect(() => {
+    refreshStatus();
+    const timer = setTimeout(() => {
+      navigate('/workspace');
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [navigate, refreshStatus]);
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '65vh' }}>
@@ -34,13 +45,13 @@ export function GithubSuccessPage() {
           GitHub Connection Successful!
         </h2>
 
-        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-md)', lineHeight: 'var(--lh-relaxed)', marginBottom: '2rem' }}>
-          Your GitHub account is linked. You can now browse repositories, view file directory trees, and perform AI analysis directly.
+        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-md)', lineHeight: 'var(--lh-relaxed)', marginBottom: '1.5rem' }}>
+          Your GitHub account is linked. Redirecting you to the Repository Workbench in a moment...
         </p>
 
         <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap' }}>
           <Button variant="primary" size="lg" icon={FolderGit2} iconRight={ArrowRight} onClick={() => navigate('/workspace')}>
-            Open Repo Workbench
+            Open Repo Workbench Now
           </Button>
           <Button variant="secondary" size="lg" onClick={() => navigate('/')}>
             Go to Dashboard

@@ -139,10 +139,22 @@ function getFrontendBaseUrl() {
   }
 }
 
-function buildAuthRedirectPath(page, query = '') {
-  const frontendBase = getFrontendBaseUrl();
-  const suffix = query ? `?${query}` : '';
-  return `${frontendBase}/auth/github/${page}${suffix}`;
+function buildAuthRedirectPath(firstArg, secondArg = '', query = '') {
+  let frontendBase;
+  let targetPage;
+  let queryStr;
+
+  if (firstArg && (String(firstArg).startsWith('http://') || String(firstArg).startsWith('https://'))) {
+    frontendBase = String(firstArg).replace(/\/$/, '');
+    targetPage = secondArg;
+    queryStr = query;
+  } else {
+    frontendBase = getFrontendBaseUrl();
+    targetPage = firstArg;
+    queryStr = secondArg;
+  }
+  const suffix = queryStr ? `?${queryStr}` : '';
+  return `${frontendBase}/auth/github/${targetPage}${suffix}`;
 }
 
 // GET /api/github/oauth - Start OAuth with PKCE
@@ -223,19 +235,12 @@ router.get('/callback', async (req, res) => {
     delete req.session.oauthState;
     delete req.session.pkceVerifier;
 
-    // Ensure session is fully persisted before redirect
-    await new Promise((resolve, reject) => {
-      req.session.save((saveErr) => {
-        if (saveErr) {
-          logger.error({ err: saveErr }, 'Session save error');
-          return reject(saveErr);
-        }
-        resolve();
-      });
+    const frontendUrl = getFrontendBaseUrl();
+    req.session.save((err) => {
+      if (err) console.error('Session save error:', err);
+      res.cookie('gh_connected', 'true', { maxAge: 86400000, httpOnly: false, sameSite: 'lax' });
+      res.redirect(buildAuthRedirectPath(frontendUrl, 'success'));
     });
-
-    const redirectUrl = buildAuthRedirectPath('success', new URLSearchParams({ connected: '1' }).toString());
-    res.redirect(redirectUrl);
   } catch (err) {
     logger.error({ err }, 'OAuth callback error');
     const query = new URLSearchParams({

@@ -86,8 +86,8 @@ function buildConfig(options = {}, token = null) {
   }
 
   return {
-    credentials: 'include',
     ...restOptions,
+    credentials: 'include',
     headers,
   };
 }

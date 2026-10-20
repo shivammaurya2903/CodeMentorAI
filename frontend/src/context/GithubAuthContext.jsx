@@ -8,8 +8,10 @@ const GithubAuthContext = createContext({
   loading: true,
   error: null,
   refreshStatus: async () => {},
+  login: () => {},
   connectGitHub: () => {},
-  logout: () => {},
+  logout: async () => {},
+  setUserProfile: () => {},
 });
 
 export function GithubAuthProvider({ children }) {
@@ -18,21 +20,51 @@ export function GithubAuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const logout = useCallback(async () => {
+    try {
+      await api.post('/api/github/logout');
+    } catch (err) {
+      console.warn('Backend logout error:', err);
+    } finally {
+      setConnected(false);
+      setUser(null);
+      localStorage.removeItem('github_connected_cache');
+    }
+  }, []);
+
+  const login = useCallback(() => {
+    githubService.connectGitHub();
+  }, []);
+
   const refreshStatus = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const status = await githubService.getStatus();
-      setConnected(status.connected);
+      const res = await api.get('/api/github/status');
+      const isConnected = !!res.connected;
+      setConnected(isConnected);
 
-      if (status.connected) {
+      if (isConnected) {
         try {
-          const profile = await githubService.getUserProfile();
-          setUser(profile);
+          const profile = await api.get('/api/github/user');
+          const normalizedUser = {
+            login: profile.login || '',
+            name: profile.name || profile.login || 'GitHub User',
+            avatarUrl: profile.avatarUrl || profile.avatar_url || '',
+            avatar_url: profile.avatar_url || profile.avatarUrl || '',
+            bio: profile.bio || '',
+            html_url: profile.html_url || '',
+            ...profile,
+          };
+          setUser(normalizedUser);
         } catch (err) {
-          console.warn('Failed to fetch user profile:', err);
-          setUser(null);
+          console.error('Failed to fetch user profile:', err);
+          if (err?.status === 401 || err?.response?.status === 401) {
+            await logout();
+          } else {
+            setUser(null);
+          }
         }
       } else {
         setUser(null);
@@ -45,26 +77,56 @@ export function GithubAuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
+  }, [logout]);
+
+  // Consolidate status checks: run exactly once on mount
+  useEffect(() => {
+    api.get('/api/github/status')
+      .then(res => {
+        setConnected(!!res.connected);
+        if (res.connected) {
+          api.get('/api/github/user')
+            .then(profile => {
+              const normalizedUser = {
+                login: profile.login || '',
+                name: profile.name || profile.login || 'GitHub User',
+                avatarUrl: profile.avatarUrl || profile.avatar_url || '',
+                avatar_url: profile.avatar_url || profile.avatarUrl || '',
+                bio: profile.bio || '',
+                html_url: profile.html_url || '',
+                ...profile,
+              };
+              setUser(normalizedUser);
+            })
+            .catch(console.error);
+        } else {
+          setUser(null);
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
-  useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
-
-  const connectGitHub = () => {
-    githubService.connectGitHub();
-  };
-
-  const logout = async () => {
-    try {
-      await api.post('/api/github/logout');
-    } catch (err) {
-      console.error('Backend logout error:', err);
+  const setUserProfile = useCallback((profile) => {
+    if (profile) {
+      const normalizedUser = {
+        login: profile.login || '',
+        name: profile.name || profile.login || 'GitHub User',
+        avatarUrl: profile.avatarUrl || profile.avatar_url || '',
+        avatar_url: profile.avatar_url || profile.avatarUrl || '',
+        bio: profile.bio || '',
+        html_url: profile.html_url || '',
+        ...profile,
+      };
+      setUser(normalizedUser);
+      setConnected(true);
+    } else {
+      setUser(null);
+      setConnected(false);
     }
-    setConnected(false);
-    setUser(null);
-    localStorage.removeItem('github_connected_cache');
-  };
+  }, []);
 
   return (
     <GithubAuthContext.Provider
@@ -74,8 +136,10 @@ export function GithubAuthProvider({ children }) {
         loading,
         error,
         refreshStatus,
-        connectGitHub,
+        login,
+        connectGitHub: login,
         logout,
+        setUserProfile,
       }}
     >
       {children}

@@ -75,9 +75,19 @@ export function FileTreeItem({ node, activeFile, onSelectFile }) {
 }
 
 export function FileTree({ files = [], activeFile, onSelectFile }) {
+  if (!files || files.length === 0) {
+    return (
+      <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+        No repository files found.
+      </div>
+    );
+  }
+
   const tree = {};
   files.forEach((file) => {
-    const parts = file.path.split('/');
+    const filePath = typeof file === 'string' ? file : file?.path;
+    if (!filePath) return;
+    const parts = filePath.split('/');
     let current = tree;
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i];
@@ -92,7 +102,7 @@ export function FileTree({ files = [], activeFile, onSelectFile }) {
       current = current[part].children;
     }
     const filename = parts[parts.length - 1];
-    current[filename] = { type: 'file', name: filename, path: file.path };
+    current[filename] = { type: 'file', name: filename, path: filePath };
   });
 
   return (

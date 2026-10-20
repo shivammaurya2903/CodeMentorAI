@@ -18,7 +18,7 @@ import { Badge } from '../ui/Card';
 import { Button } from '../ui/Button';
 
 export function Sidebar({ collapsed = false }) {
-  const { connected, user, connectGitHub, logout } = useGithubAuth();
+  const { connected, user, login, connectGitHub, logout } = useGithubAuth();
   const { theme, toggleTheme } = useTheme();
 
   const navItems = [
@@ -158,15 +158,34 @@ export function Sidebar({ collapsed = false }) {
           {connected && user ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <img
-                  src={user.avatar_url}
-                  alt={user.login}
-                  style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--border-strong)' }}
-                />
+                {(user.avatarUrl || user.avatar_url) ? (
+                  <img
+                    src={user.avatarUrl || user.avatar_url}
+                    alt={user.login}
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--border-strong)', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--primary)',
+                      color: 'var(--text-inverse)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: 'var(--text-xs)',
+                    }}
+                  >
+                    {user.login?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                )}
                 {!collapsed && (
                   <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1 }}>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--fw-semibold)', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {user.login}
+                      @{user.login}
                     </div>
                     <Badge variant="success" size="sm">
                       Connected
@@ -190,19 +209,19 @@ export function Sidebar({ collapsed = false }) {
                     fontWeight: 500,
                   }}
                 >
-                  <LogOut size={14} /> Disconnect GitHub
+                  <LogOut size={14} /> Logout
                 </button>
               )}
             </div>
           ) : (
             <Button
-              onClick={connectGitHub}
+              onClick={login || connectGitHub}
               variant="secondary"
               size="sm"
               icon={Github}
               fullWidth
             >
-              {!collapsed ? 'Connect GitHub' : ''}
+              {!collapsed ? 'Connect to GitHub' : ''}
             </Button>
           )}
         </div>

@@ -198,6 +198,10 @@ async function getUserRepos(sessionId) {
     language: repo.language,
     private: repo.private,
     html_url: repo.html_url,
+    stargazers_count: repo.stargazers_count || 0,
+    stars: repo.stargazers_count || 0,
+    stargazersCount: repo.stargazers_count || 0,
+    forks_count: repo.forks_count || 0,
   }));
 }
 
@@ -207,7 +211,9 @@ async function getAuthenticatedUser(sessionId) {
   const { data: user } = await octokit.rest.users.getAuthenticated();
   return {
     login: user.login,
+    name: user.name || user.login,
     avatar_url: user.avatar_url,
+    avatarUrl: user.avatar_url,
     bio: user.bio,
     html_url: user.html_url,
   };

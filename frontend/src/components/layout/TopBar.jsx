@@ -1,11 +1,11 @@
 import React from 'react';
-import { Menu, Github, Sparkles } from 'lucide-react';
+import { Menu, Github, Sparkles, LogOut, User } from 'lucide-react';
 import { useGithubAuth } from '../../context/GithubAuthContext';
 import { Button, IconButton } from '../ui/Button';
 import { Badge } from '../ui/Card';
 
 export function TopBar({ onOpenMobileNav, pageTitle = 'Dashboard' }) {
-  const { connected, user, connectGitHub } = useGithubAuth();
+  const { connected, user, login, connectGitHub, logout } = useGithubAuth();
 
   return (
     <header
@@ -42,25 +42,68 @@ export function TopBar({ onOpenMobileNav, pageTitle = 'Dashboard' }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         {connected && user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Badge variant="success" size="md">
-              <span
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--success)',
-                  display: 'inline-block',
-                }}
-              />
-              GitHub Active
-            </Badge>
-            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', fontWeight: 500 }} className="desktop-only">
-              {user.login}
-            </span>
+            {/* User avatar and info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {(user.avatarUrl || user.avatar_url) ? (
+                <img
+                  src={user.avatarUrl || user.avatar_url}
+                  alt={user.login}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--primary)',
+                    color: 'var(--text-inverse)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 'bold',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  {user.login?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text)' }}>
+                  @{user.login}
+                </span>
+                <Badge variant="success" size="xs">
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--success)',
+                      display: 'inline-block',
+                      marginRight: '4px',
+                    }}
+                  />
+                  Connected
+                </Badge>
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={LogOut}
+              onClick={logout}
+            >
+              Logout
+            </Button>
           </div>
         ) : (
-          <Button variant="secondary" size="sm" icon={Github} onClick={connectGitHub}>
-            Connect GitHub
+          <Button variant="secondary" size="sm" icon={Github} onClick={login || connectGitHub}>
+            Connect to GitHub
           </Button>
         )}
 
