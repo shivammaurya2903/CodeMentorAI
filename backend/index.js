@@ -62,11 +62,6 @@ const csrfProtection = process.env.NODE_ENV === 'test'
       },
     });
 
-// Make CSRF token available to frontend
-app.get('/api/csrf-token', (req, res) => {
-  res.json({ csrfToken: req.csrfToken() });
-});
-
 // Security Headers
 app.use(helmet({
   contentSecurityPolicy: {
@@ -84,14 +79,16 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-const allowedOrigins = (process.env.FRONTEND_URL
+const defaultOrigins = [
+  'http://127.0.0.1:5500',
+  'http://localhost:5500',
+  'http://127.0.0.1:3000',
+  'http://localhost:3000',
+];
+const envOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim()).filter(Boolean)
-  : [
-      'http://127.0.0.1:5500',
-      'http://localhost:5500',
-      'http://127.0.0.1:3000',
-      'http://localhost:3000',
-    ]);
+  : [];
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
 
 app.use(cors({
   origin(origin, callback) {
@@ -100,6 +97,18 @@ app.use(cors({
     return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-CSRF-Token',
+    'x-csrf-token',
+    'csrf-token',
+    'X-Requested-With',
+    'Accept',
+    'Cookie'
+  ],
+  exposedHeaders: ['Set-Cookie', 'X-CSRF-Token']
 }));
 
 // Rate limiting - stricter for AI endpoints
@@ -189,6 +198,18 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000,
   },
 }));
+
+// Make CSRF token available to frontend (must be after session middleware)
+app.get('/api/csrf-token', csrfProtection, (req, res) => {
+  const token = typeof req.csrfToken === 'function' ? req.csrfToken() : 'test-csrf-token';
+  res.cookie('XSRF-TOKEN', token, {
+    secure: isProduction,
+    httpOnly: false, // Accessible to client-side JS
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+  });
+  res.json({ csrfToken: token });
+});
 
 // Routes - apply CSRF protection to mutating endpoints
 app.use("/api/chat", aiLimiter, csrfProtection, chatRoute);

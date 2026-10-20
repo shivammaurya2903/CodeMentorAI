@@ -31,7 +31,7 @@ function isGroqConfigured() {
 }
 
 function getGroqModel() {
-  return process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+  return process.env.GROQ_MODEL || "qwen/qwen3-8b-27b";
 }
 
 function logGroqError(error) {

@@ -20,7 +20,7 @@ describe('Groq Service Provider Unit Test Suite', () => {
 
   it('should return default or custom model name from environment', () => {
     delete process.env.GROQ_MODEL;
-    expect(getGroqModel()).toBe('llama-3.1-8b-instant');
+    expect(getGroqModel()).toBe('qwen/qwen3-8b-27b');
 
     process.env.GROQ_MODEL = 'llama-3.3-70b-versatile';
     expect(getGroqModel()).toBe('llama-3.3-70b-versatile');
