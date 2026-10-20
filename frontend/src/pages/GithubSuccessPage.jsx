@@ -7,16 +7,41 @@ import { useGithubAuth } from '../context/GithubAuthContext';
 
 export function GithubSuccessPage() {
   const navigate = useNavigate();
-  const { refreshStatus } = useGithubAuth();
+  const { refreshStatus, setConnected } = useGithubAuth();
 
   useEffect(() => {
-    refreshStatus();
-    const timer = setTimeout(() => {
-      navigate('/workspace');
-    }, 1500);
+    let isMounted = true;
 
-    return () => clearTimeout(timer);
-  }, [navigate, refreshStatus]);
+    // Immediately mark connected to prevent race conditions on fast redirects
+    if (setConnected) {
+      setConnected(true);
+    }
+    localStorage.setItem('gh_connected', 'true');
+
+    // Refresh context status asynchronously
+    refreshStatus();
+
+    const timer = setTimeout(async () => {
+      await refreshStatus();
+      if (isMounted) {
+        window.location.href = '/workspace';
+      }
+    }, 1200);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [refreshStatus, setConnected]);
+
+  const handleOpenWorkbench = async () => {
+    if (setConnected) {
+      setConnected(true);
+    }
+    localStorage.setItem('gh_connected', 'true');
+    await refreshStatus();
+    window.location.href = '/workspace';
+  };
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '65vh' }}>
@@ -50,7 +75,13 @@ export function GithubSuccessPage() {
         </p>
 
         <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Button variant="primary" size="lg" icon={FolderGit2} iconRight={ArrowRight} onClick={() => navigate('/workspace')}>
+          <Button
+            variant="primary"
+            size="lg"
+            icon={FolderGit2}
+            iconRight={ArrowRight}
+            onClick={handleOpenWorkbench}
+          >
             Open Repo Workbench Now
           </Button>
           <Button variant="secondary" size="lg" onClick={() => navigate('/')}>

@@ -40,14 +40,14 @@ export function TopBar({ onOpenMobileNav, pageTitle = 'Dashboard' }) {
 
       {/* Right: GitHub Status & Quick CTA */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        {connected && user ? (
+        {connected ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {/* User avatar and info */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {(user.avatarUrl || user.avatar_url) ? (
+              {(user?.avatarUrl || user?.avatar_url) ? (
                 <img
                   src={user.avatarUrl || user.avatar_url}
-                  alt={user.login}
+                  alt={user.login || 'GitHub User'}
                   style={{
                     width: '32px',
                     height: '32px',
@@ -70,12 +70,12 @@ export function TopBar({ onOpenMobileNav, pageTitle = 'Dashboard' }) {
                     fontSize: 'var(--text-sm)',
                   }}
                 >
-                  {user.login?.charAt(0)?.toUpperCase() || 'U'}
+                  {user?.login?.charAt(0)?.toUpperCase() || 'GH'}
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
                 <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text)' }}>
-                  @{user.login}
+                  {user?.login ? `@${user.login}` : (user?.name || 'GitHub Connected')}
                 </span>
                 <Badge variant="success" size="xs">
                   <span

@@ -155,13 +155,13 @@ export function Sidebar({ collapsed = false }) {
             border: '1px solid var(--border-strong)',
           }}
         >
-          {connected && user ? (
+          {connected ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                {(user.avatarUrl || user.avatar_url) ? (
+                {(user?.avatarUrl || user?.avatar_url) ? (
                   <img
                     src={user.avatarUrl || user.avatar_url}
-                    alt={user.login}
+                    alt={user.login || 'GitHub User'}
                     style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--border-strong)', objectFit: 'cover' }}
                   />
                 ) : (
@@ -179,13 +179,13 @@ export function Sidebar({ collapsed = false }) {
                       fontSize: 'var(--text-xs)',
                     }}
                   >
-                    {user.login?.charAt(0)?.toUpperCase() || 'U'}
+                    {user?.login?.charAt(0)?.toUpperCase() || 'GH'}
                   </div>
                 )}
                 {!collapsed && (
                   <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1 }}>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--fw-semibold)', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      @{user.login}
+                      {user?.login ? `@${user.login}` : (user?.name || 'Connected')}
                     </div>
                     <Badge variant="success" size="sm">
                       Connected

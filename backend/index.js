@@ -20,8 +20,8 @@ function validateEnvironment() {
 
   const missing = required.filter(key => !process.env[key]);
   if (missing.length > 0) {
-    logger.error({ missing }, 'Missing required environment variables');
-    process.exit(1);
+    logger.error({ missing }, 'Fatal startup error: Missing required environment variables in production');
+    throw new Error(`Fatal startup error: Missing required environment variables: ${missing.join(', ')}`);
   }
 }
 
@@ -87,6 +87,8 @@ app.use(helmet({
 const defaultOrigins = [
   'http://127.0.0.1:5500',
   'http://localhost:5500',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
   'http://127.0.0.1:3000',
   'http://localhost:3000',
 ];
@@ -119,7 +121,10 @@ app.use(cors({
     'csrf-token',
     'X-Requested-With',
     'Accept',
-    'Cookie'
+    'Cookie',
+    'Cache-Control',
+    'cache-control',
+    'Pragma'
   ],
   exposedHeaders: ['Set-Cookie', 'X-CSRF-Token']
 }));
@@ -211,9 +216,6 @@ app.use(session({
     httpOnly: true,
     sameSite: isProduction ? 'lax' : 'lax',
     maxAge: 24 * 60 * 60 * 1000,
-    // In development, set domain to 'localhost' to allow cross-port cookie sharing
-    // This helps with frontend (localhost:5500) accessing backend (localhost:5000) session
-    ...(!isProduction && { domain: 'localhost' }),
   },
 }));
 

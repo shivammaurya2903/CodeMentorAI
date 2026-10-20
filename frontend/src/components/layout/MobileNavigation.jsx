@@ -118,13 +118,13 @@ export function MobileNavigation({ isOpen, onClose }) {
 
         {/* User Account / Connect GitHub */}
         <div style={{ paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
-          {connected && user ? (
+          {connected ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                {(user.avatarUrl || user.avatar_url) ? (
+                {(user?.avatarUrl || user?.avatar_url) ? (
                   <img
                     src={user.avatarUrl || user.avatar_url}
-                    alt={user.login}
+                    alt={user.login || 'GitHub User'}
                     style={{ width: '36px', height: '36px', borderRadius: '50%', border: '1px solid var(--border)', objectFit: 'cover' }}
                   />
                 ) : (
@@ -142,12 +142,12 @@ export function MobileNavigation({ isOpen, onClose }) {
                       fontSize: 'var(--text-sm)',
                     }}
                   >
-                    {user.login?.charAt(0)?.toUpperCase() || 'U'}
+                    {user?.login?.charAt(0)?.toUpperCase() || 'GH'}
                   </div>
                 )}
                 <div>
                   <div style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--text)', fontSize: 'var(--text-base)' }}>
-                    @{user.login}
+                    {user?.login ? `@${user.login}` : (user?.name || 'Connected')}
                   </div>
                   <Badge variant="success" size="sm">Connected</Badge>
                 </div>

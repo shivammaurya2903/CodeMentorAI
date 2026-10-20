@@ -1,5 +1,5 @@
 import React from 'react';
-import { Github, ArrowRight, CheckCircle, LogOut } from 'lucide-react';
+import { Github, ArrowRight, CheckCircle, LogOut, Loader2 } from 'lucide-react';
 import { Card, Badge } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useGithubAuth } from '../../context/GithubAuthContext';
@@ -7,8 +7,12 @@ import { useGithubAuth } from '../../context/GithubAuthContext';
 export function GithubConnect() {
   const { connected, user, connectGitHub, logout } = useGithubAuth();
 
-  if (connected && user) {
-    const avatarUrl = user.avatarUrl || user.avatar_url;
+  // If connected, hide the "Connect Your GitHub Repository" banner completely
+  if (connected) {
+    const avatarUrl = user?.avatarUrl || user?.avatar_url;
+    const username = user?.login || 'Connected User';
+    const displayName = user?.name || username;
+
     return (
       <Card
         style={{
@@ -30,7 +34,7 @@ export function GithubConnect() {
             {avatarUrl ? (
               <img
                 src={avatarUrl}
-                alt={user.login}
+                alt={username}
                 style={{
                   width: '52px',
                   height: '52px',
@@ -54,20 +58,20 @@ export function GithubConnect() {
                   fontSize: 'var(--text-xl)',
                 }}
               >
-                {user.login?.charAt(0)?.toUpperCase() || 'U'}
+                {username.charAt(0).toUpperCase()}
               </div>
             )}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
                 <h3 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--fw-bold)', color: 'var(--text)', margin: 0 }}>
-                  {user.name || user.login}
+                  {displayName}
                 </h3>
                 <Badge variant="success" size="sm">
                   <CheckCircle size={12} style={{ display: 'inline-block', marginRight: '4px' }} /> Connected
                 </Badge>
               </div>
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>
-                @{user.login} • GitHub OAuth Active
+                @{username} • GitHub OAuth Active
               </p>
             </div>
           </div>

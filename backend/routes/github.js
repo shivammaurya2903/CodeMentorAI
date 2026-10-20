@@ -106,7 +106,7 @@ async function ensureGitHubSession(req, res) {
 
     if (token && looksLikeGitHubToken(token)) {
       if (token !== existingSessionToken) {
-        setUserToken(req.sessionID, token);
+        await setUserToken(req.sessionID, token);
       }
       req.session.githubConnected = true;
       return true;
@@ -237,8 +237,8 @@ router.get('/callback', async (req, res) => {
 
     const frontendUrl = getFrontendBaseUrl();
     req.session.save((err) => {
-      if (err) console.error('Session save error:', err);
-      res.cookie('gh_connected', 'true', { maxAge: 86400000, httpOnly: false, sameSite: 'lax' });
+      if (err) logger.error({ err }, 'Session save error');
+      res.cookie('gh_connected', 'true', { maxAge: 86400000, httpOnly: false, sameSite: 'lax', path: '/' });
       res.redirect(buildAuthRedirectPath(frontendUrl, 'success'));
     });
   } catch (err) {
@@ -253,6 +253,7 @@ router.get('/callback', async (req, res) => {
 
 // GET /api/github/user - Authenticated user profile
 router.get('/user', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   if (!(await ensureGitHubSession(req, res))) return;
 
   const user = await getAuthenticatedUser(req.sessionID);
@@ -261,6 +262,7 @@ router.get('/user', asyncHandler(async (req, res) => {
 
 // GET /api/github/repos - List user repos (req.sessionID for auth)
 router.get('/repos', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   if (!(await ensureGitHubSession(req, res))) return;
 
   const repos = await getUserRepos(req.sessionID);
@@ -330,6 +332,7 @@ router.get('/prs', asyncHandler(async (req, res) => {
 
 // GET /api/github/status
 router.get('/status', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   const hasToken = !!(await getUserToken(req.sessionID));
   if (!hasToken && req.session.githubConnected) {
     req.session.githubConnected = false;
@@ -350,8 +353,8 @@ router.post('/logout', asyncHandler(async (req, res) => {
     await removeUserToken(sessionId);
   }
 
-  res.clearCookie('gh_connected');
-  res.clearCookie('connect.sid');
+  res.clearCookie('gh_connected', { path: '/' });
+  res.clearCookie('connect.sid', { path: '/' });
 
   if (req.session) {
     await new Promise((resolve) => {

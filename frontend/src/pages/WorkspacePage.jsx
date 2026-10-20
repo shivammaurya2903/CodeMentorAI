@@ -31,7 +31,10 @@ import { Skeleton, ErrorState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Card';
 
 export function WorkspacePage() {
-  const { connected, user, refreshStatus, logout } = useGithubAuth();
+  const { connected: ctxConnected, user, loading: authLoading, refreshStatus, logout } = useGithubAuth();
+  const isCookieConnected = typeof document !== 'undefined' && document.cookie.includes('gh_connected=true');
+  const isStorageConnected = typeof localStorage !== 'undefined' && localStorage.getItem('gh_connected') === 'true';
+  const connected = Boolean(ctxConnected || isCookieConnected || isStorageConnected);
   const [searchParams, setSearchParams] = useSearchParams();
   const repoParam = searchParams.get('repo');
 
@@ -68,6 +71,13 @@ export function WorkspacePage() {
   const [activePatch, setActivePatch] = useState(null);
   const [error, setError] = useState(null);
 
+  // Re-verify auth status on mount if currently disconnected
+  useEffect(() => {
+    if (!connected) {
+      refreshStatus();
+    }
+  }, [connected, refreshStatus]);
+
   // Trigger repository fetch when connected changes
   useEffect(() => {
     if (connected) {
@@ -77,10 +87,16 @@ export function WorkspacePage() {
           const repoList = Array.isArray(data) ? data : (data?.repos || []);
           setRepositories(repoList);
         })
-        .catch((err) => {
-          console.error(err);
-          if (err?.status === 401 || err?.response?.status === 401) {
-            logout();
+        .catch(async (err) => {
+          console.error('Failed to load repositories:', err);
+          if (err?.status === 401) {
+            // Re-check status before forcing logout to prevent transient race conditions
+            const freshStatus = await refreshStatus();
+            if (!freshStatus) {
+              logout();
+            }
+          } else {
+            setError(err?.message || 'Failed to load GitHub repositories.');
           }
         })
         .finally(() => {
@@ -110,20 +126,19 @@ export function WorkspacePage() {
       const status = await githubService.getRepositoryStatus(repoName);
       setIndexStatus(status.indexed ? status : null);
     } catch (err) {
-      if (
-        err?.status === 401 ||
-        err?.response?.status === 401 ||
-        String(err?.message).includes('401') ||
-        String(err?.message).toLowerCase().includes('unauthorized')
-      ) {
-        await logout();
-      } else {
-        setError(err.message || 'Unable to fetch repository tree.');
+      const is401 = err?.status === 401 || err?.response?.status === 401 || String(err?.message).includes('401');
+      if (is401) {
+        const freshStatus = await refreshStatus();
+        if (!freshStatus) {
+          await logout();
+          return;
+        }
       }
+      setError(err.message || 'Unable to fetch repository tree.');
     } finally {
       setLoadingFiles(false);
     }
-  }, [logout]);
+  }, [logout, refreshStatus]);
 
   useEffect(() => {
     if (repoParam) {
@@ -275,6 +290,15 @@ export function WorkspacePage() {
       setSendingChat(false);
     }
   };
+
+  if (authLoading && !connected) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1rem 0' }}>
+        <Skeleton height="80px" borderRadius="var(--radius-lg)" />
+        <Skeleton height="320px" borderRadius="var(--radius-lg)" />
+      </div>
+    );
+  }
 
   if (!connected) {
     return (

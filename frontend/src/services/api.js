@@ -73,9 +73,11 @@ function buildConfig(options = {}, token = null) {
   const { headers: customHeaders, ...restOptions } = options;
   const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes((options.method || 'GET').toUpperCase());
 
-  // Explicitly ensure 'Content-Type': 'application/json' for JSON payloads
+  // Explicitly ensure 'Content-Type': 'application/json' for JSON payloads with bodies
   const headers = {
-    ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(isMutating && !(options.body instanceof FormData) && options.body !== undefined
+      ? { 'Content-Type': 'application/json' }
+      : {}),
     ...(customHeaders || {}),
   };
 
@@ -93,6 +95,10 @@ function buildConfig(options = {}, token = null) {
 }
 
 async function parseResponse(response) {
+  if (response.status === 204 || response.status === 304) {
+    return {};
+  }
+
   const contentType = response.headers.get('content-type');
   let data;
 
@@ -100,6 +106,9 @@ async function parseResponse(response) {
     data = await response.json();
   } else {
     const text = await response.text();
+    if (!text || !text.trim()) {
+      return {};
+    }
     try {
       data = JSON.parse(text);
     } catch {
@@ -129,7 +138,7 @@ async function request(endpoint, options = {}) {
     const response = await fetch(url, config);
     const data = await parseResponse(response);
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 304) {
       // If CSRF token is invalid, clear cache, fetch a fresh token, and retry ONCE
       if (response.status === 403 && data?.code === 'CSRF_TOKEN_INVALID' && isMutating && !options._isRetry) {
         csrfToken = null;

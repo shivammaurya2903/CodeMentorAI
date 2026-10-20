@@ -58,10 +58,8 @@ class ErrorBoundary extends Component {
 export function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <GithubAuthProvider>
-          <BrowserRouter>
-            <Routes>
+      <BrowserRouter>
+        <Routes>
               <Route
                 path="/"
                 element={
@@ -124,10 +122,8 @@ export function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
-        </GithubAuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
-}
+        </ErrorBoundary>
+      );
+    }
 
 export default App;

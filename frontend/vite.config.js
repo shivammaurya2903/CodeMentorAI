@@ -19,11 +19,10 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:5000',
           changeOrigin: true,
           secure: false,
-          // Only proxy backend auth routes; frontend handles /auth/github/success and /auth/github/error
           bypass: (req) => {
             const url = req.url || '';
             if (url.includes('/github/success') || url.includes('/github/error')) {
-              return url; // Let Vite handle these frontend routes
+              return url;
             }
           },
         },
@@ -32,8 +31,11 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: !isProduction,
-      minify: isProduction ? 'esbuild' : false,
+      minify: 'esbuild',
+      cssMinify: true,
       cssCodeSplit: true,
+      target: 'es2020',
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -49,6 +51,9 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+    },
+    esbuild: {
+      drop: isProduction ? ['console', 'debugger'] : [],
     },
   };
 });

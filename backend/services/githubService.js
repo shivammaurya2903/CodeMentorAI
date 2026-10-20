@@ -73,43 +73,44 @@ async function removeUserTokenRedis(sessionId) {
   }
 }
 
-function setUserToken(sessionId, accessToken) {
-  // Try Redis first, fallback to memory
-  const redisSuccess = setUserTokenRedis(sessionId, accessToken);
-  if (!redisSuccess) {
-    // Enforce max size to prevent memory leaks
-    if (userTokens.size >= MAX_TOKENS) {
-      const entries = [...userTokens.entries()];
-      entries.sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
-      const toRemove = entries.slice(0, Math.floor(MAX_TOKENS * 0.1));
-      for (const [key] of toRemove) {
-        userTokens.delete(key);
-      }
+async function setUserToken(sessionId, accessToken) {
+  // Always store in memory for guaranteed immediate access
+  if (userTokens.size >= MAX_TOKENS) {
+    const entries = [...userTokens.entries()];
+    entries.sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
+    const toRemove = entries.slice(0, Math.floor(MAX_TOKENS * 0.1));
+    for (const [key] of toRemove) {
+      userTokens.delete(key);
     }
-    userTokens.set(sessionId, {
-      access_token: accessToken,
-      createdAt: Date.now(),
-    });
   }
+  userTokens.set(sessionId, {
+    access_token: accessToken,
+    createdAt: Date.now(),
+  });
+
+  // Also persist to Redis if available
+  await setUserTokenRedis(sessionId, accessToken);
 }
 
 async function getUserToken(sessionId) {
-  // Try Redis first, fallback to memory
-  const redisData = await getUserTokenRedis(sessionId);
-  if (redisData) return redisData;
-
+  // Check in-memory store first
   const userData = userTokens.get(sessionId);
-  if (!userData?.access_token) {
-    return null;
-  }
-
-  const age = Date.now() - (userData.createdAt || 0);
-  if (age > TOKEN_TTL_MS) {
+  if (userData?.access_token) {
+    const age = Date.now() - (userData.createdAt || 0);
+    if (age <= TOKEN_TTL_MS) {
+      return userData;
+    }
     userTokens.delete(sessionId);
-    return null;
   }
 
-  return userData;
+  // Try Redis fallback if not in local memory or after server restart
+  const redisData = await getUserTokenRedis(sessionId);
+  if (redisData?.access_token) {
+    userTokens.set(sessionId, redisData);
+    return redisData;
+  }
+
+  return null;
 }
 
 async function removeUserToken(sessionId) {
@@ -163,13 +164,13 @@ async function exchangeCodeForToken(code, sessionId, state, codeVerifier) {
     throw new Error('No access token returned by GitHub');
   }
 
-  setUserToken(sessionId, tokenData.access_token);
+  await setUserToken(sessionId, tokenData.access_token);
   return { success: true, sessionId, access_token: tokenData.access_token };
 }
 
 // Get Octokit with user token
-function getOctokit(sessionId) {
-  const userData = getUserToken(sessionId);
+async function getOctokit(sessionId) {
+  const userData = await getUserToken(sessionId);
   if (!userData?.access_token) {
     throw new Error('No GitHub token found for session. Connect GitHub first.');
   }
@@ -186,7 +187,7 @@ function parseRepoFullName(repoFullName) {
 
 // GET user repos
 async function getUserRepos(sessionId) {
-  const octokit = getOctokit(sessionId);
+  const octokit = await getOctokit(sessionId);
   const { data: repos } = await octokit.rest.repos.listForAuthenticatedUser({
     sort: 'updated',
     per_page: 20,
@@ -207,7 +208,7 @@ async function getUserRepos(sessionId) {
 
 // GET authenticated user profile
 async function getAuthenticatedUser(sessionId) {
-  const octokit = getOctokit(sessionId);
+  const octokit = await getOctokit(sessionId);
   const { data: user } = await octokit.rest.users.getAuthenticated();
   return {
     login: user.login,
@@ -221,7 +222,7 @@ async function getAuthenticatedUser(sessionId) {
 
 // GET a single repository details
 async function getRepository(sessionId, owner, repo) {
-  const octokit = getOctokit(sessionId);
+  const octokit = await getOctokit(sessionId);
   const { data } = await octokit.rest.repos.get({ owner, repo });
   return {
     name: data.name,
@@ -239,7 +240,7 @@ async function getRepository(sessionId, owner, repo) {
 
 // GET repo files/tree (with truncation protection & limits)
 async function getRepoFiles(sessionId, repo) {
-  const octokit = getOctokit(sessionId);
+  const octokit = await getOctokit(sessionId);
   const { owner, repo: repoName } = parseRepoFullName(repo);
 
   const { data: repoData } = await octokit.rest.repos.get({ owner, repo: repoName });
@@ -290,7 +291,7 @@ async function getRepoFiles(sessionId, repo) {
 
 // GET file content
 async function getFileContent(sessionId, repo, path) {
-  const octokit = getOctokit(sessionId);
+  const octokit = await getOctokit(sessionId);
   const { owner, repo: repoName } = parseRepoFullName(repo);
   const { data } = await octokit.rest.repos.getContent({
     owner,
@@ -305,7 +306,7 @@ async function getFileContent(sessionId, repo, path) {
 
 // GET PRs (bonus)
 async function getPullRequests(sessionId, repo, state = 'open') {
-  const octokit = getOctokit(sessionId);
+  const octokit = await getOctokit(sessionId);
   const { owner, repo: repoName } = parseRepoFullName(repo);
   const { data: prs } = await octokit.rest.pulls.list({
     owner,
