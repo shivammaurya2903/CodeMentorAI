@@ -5,93 +5,110 @@ const { runStaticPerformanceScan } = require('../services/analysis/performanceAn
 const { analyzeArchitecture } = require('../services/analysis/architectureAnalyzer');
 const { generateProjectHealthScorecard } = require('../services/reporting/healthDashboardService');
 const { generateSecurityAudit, generatePerformanceAudit } = require('../services/aiService');
+const { AppError, asyncHandler } = require('../utils/errorHandler');
 
 const router = express.Router();
 
 // POST /api/analysis/security { repo: 'owner/repo', code, filePath }
-router.post('/security', async (req, res) => {
-  const { repo, code, filePath = 'file.js' } = req.body;
-
-  try {
-    let staticFindings = [];
-    if (code) {
-      staticFindings = runStaticSecurityScan(code, filePath);
-    }
-
-    let aiFindings = { summary: 'Static audit complete', findings: [] };
-    if (code) {
-      try {
-        aiFindings = await generateSecurityAudit(code, filePath);
-      } catch (err) {
-        console.warn('AI Security Audit fallback to static:', err.message);
-      }
-    }
-
-    res.json({
-      filePath,
-      staticFindings,
-      aiSummary: aiFindings.summary,
-      aiFindings: aiFindings.findings,
-      combinedFindings: [...staticFindings, ...aiFindings.findings],
-    });
-  } catch (err) {
-    console.error('Security analysis route error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/analysis/performance { repo, code, filePath }
-router.post('/performance', async (req, res) => {
+router.post('/security', asyncHandler(async (req, res) => {
   const { code, filePath = 'file.js' } = req.body;
 
-  try {
-    let staticFindings = [];
-    if (code) {
-      staticFindings = runStaticPerformanceScan(code, filePath);
-    }
-
-    let aiFindings = { summary: 'Performance audit complete', findings: [] };
-    if (code) {
-      try {
-        aiFindings = await generatePerformanceAudit(code, filePath);
-      } catch (err) {
-        console.warn('AI Performance Audit fallback to static:', err.message);
-      }
-    }
-
-    res.json({
-      filePath,
-      staticFindings,
-      aiSummary: aiFindings.summary,
-      aiFindings: aiFindings.findings,
-      combinedFindings: [...staticFindings, ...aiFindings.findings],
-    });
-  } catch (err) {
-    console.error('Performance analysis route error:', err);
-    res.status(500).json({ error: err.message });
+  if (!code || typeof code !== 'string') {
+    throw new AppError('Valid code is required', 400, 'VALIDATION_ERROR');
   }
-});
+
+  let staticFindings = [];
+  if (code) {
+    staticFindings = runStaticSecurityScan(code, filePath);
+  }
+
+  let aiFindings = { summary: 'Static audit complete', findings: [] };
+  if (code) {
+    try {
+      aiFindings = await generateSecurityAudit(code, filePath);
+    } catch (err) {
+      console.warn('AI Security Audit fallback to static:', err.message);
+    }
+  }
+
+  res.json({
+    filePath,
+    staticFindings,
+    aiSummary: aiFindings.summary,
+    aiFindings: aiFindings.findings,
+    combinedFindings: [...staticFindings, ...aiFindings.findings],
+  });
+}));
+
+// POST /api/analysis/performance { repo, code, filePath }
+router.post('/performance', asyncHandler(async (req, res) => {
+  const { code, filePath = 'file.js' } = req.body;
+
+  if (!code || typeof code !== 'string') {
+    throw new AppError('Valid code is required', 400, 'VALIDATION_ERROR');
+  }
+
+  let staticFindings = [];
+  if (code) {
+    staticFindings = runStaticPerformanceScan(code, filePath);
+  }
+
+  let aiFindings = { summary: 'Performance audit complete', findings: [] };
+  if (code) {
+    try {
+      aiFindings = await generatePerformanceAudit(code, filePath);
+    } catch (err) {
+      console.warn('AI Performance Audit fallback to static:', err.message);
+    }
+  }
+
+  res.json({
+    filePath,
+    staticFindings,
+    aiSummary: aiFindings.summary,
+    aiFindings: aiFindings.findings,
+    combinedFindings: [...staticFindings, ...aiFindings.findings],
+  });
+}));
 
 // POST /api/analysis/architecture { repo: 'owner/repo' }
-router.post('/architecture', (req, res) => {
+router.post('/architecture', asyncHandler(async (req, res) => {
   const { repo } = req.body;
+  if (!repo) {
+    throw new AppError('Repository is required', 400, 'VALIDATION_ERROR');
+  }
   const index = repositoryIndexer.getRepositoryIndex(repo);
+  if (!index) {
+    throw new AppError('Repository not indexed. Please index first.', 400, 'REPOSITORY_NOT_INDEXED');
+  }
   const result = analyzeArchitecture(index);
   res.json(result);
-});
+}));
 
 // POST /api/analysis/health { repo: 'owner/repo' }
-router.post('/health', (req, res) => {
+router.post('/health', asyncHandler(async (req, res) => {
   const { repo } = req.body;
+  if (!repo) {
+    throw new AppError('Repository is required', 400, 'VALIDATION_ERROR');
+  }
   const index = repositoryIndexer.getRepositoryIndex(repo);
+  if (!index) {
+    throw new AppError('Repository not indexed. Please index first.', 400, 'REPOSITORY_NOT_INDEXED');
+  }
   const scorecard = generateProjectHealthScorecard(index);
   res.json(scorecard);
-});
+}));
 
 // POST /api/analysis/improve-plan { repo: 'owner/repo' }
-router.post('/improve-plan', (req, res) => {
+router.post('/improve-plan', asyncHandler(async (req, res) => {
   const { repo } = req.body;
+  if (!repo) {
+    throw new AppError('Repository is required', 400, 'VALIDATION_ERROR');
+  }
   const index = repositoryIndexer.getRepositoryIndex(repo);
+  if (!index) {
+    throw new AppError('Repository not indexed. Please index first.', 400, 'REPOSITORY_NOT_INDEXED');
+  }
   const scorecard = generateProjectHealthScorecard(index);
 
   res.json({
@@ -106,6 +123,6 @@ router.post('/improve-plan', (req, res) => {
       longTerm: scorecard.topRecommendations.filter(r => r.priority.includes('P3')),
     },
   });
-});
+}));
 
 module.exports = router;

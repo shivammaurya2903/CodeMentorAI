@@ -12,7 +12,9 @@ const {
   getUserToken,
   setUserToken,
   userTokens,
+  removeUserToken,
 } = require('../services/githubService');
+const { AppError, asyncHandler } = require('../utils/errorHandler');
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5500';
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL || 'http://localhost:5000/auth/github/callback';
@@ -35,6 +37,18 @@ function validateFilePath(filePath) {
   // Basic length check
   if (filePath.length > 500) {
     throw new Error('File path too long');
+  }
+  // Allow only alphanumeric, hyphens, underscores, dots, and forward slashes
+  const validPathRegex = /^[a-zA-Z0-9_.\-\/]+$/;
+  if (!validPathRegex.test(filePath)) {
+    throw new Error('File path contains invalid characters');
+  }
+  // Prevent hidden files/directories
+  const segments = filePath.split('/');
+  for (const segment of segments) {
+    if (segment.startsWith('.') && segment !== '.' && segment !== '..') {
+      throw new Error('Hidden files/directories not allowed');
+    }
   }
 }
 
@@ -81,8 +95,8 @@ function looksLikeGitHubToken(token) {
   return /^(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|[a-f0-9]{40})$/.test(token);
 }
 
-function ensureGitHubSession(req, res) {
-  const existingSessionToken = getUserToken(req.sessionID)?.access_token;
+async function ensureGitHubSession(req, res) {
+  const existingSessionToken = (await getUserToken(req.sessionID))?.access_token;
   const authHeader = req.headers.authorization || '';
   if (authHeader.startsWith('Bearer ')) {
     const rawToken = authHeader.slice('Bearer '.length).trim();
@@ -103,7 +117,7 @@ function ensureGitHubSession(req, res) {
     }
   }
 
-  const userData = getUserToken(req.sessionID);
+  const userData = await getUserToken(req.sessionID);
   if (!userData?.access_token) {
     req.session.githubConnected = false;
     res.status(401).json({ error: 'Session expired, reconnect GitHub' });
@@ -138,7 +152,7 @@ function buildAuthRedirectPath(page, query = '') {
   return `${frontendBase}/auth/github/${page}${suffix}`;
 }
 
-// GET /api/github/oauth - Start OAuth
+// GET /api/github/oauth - Start OAuth with PKCE
 router.get('/oauth', (req, res) => {
   if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
     const frontendBase = getFrontendBaseUrl();
@@ -148,12 +162,20 @@ router.get('/oauth', (req, res) => {
   }
 
   const state = crypto.randomBytes(32).toString('hex');
+  // PKCE: Generate code_verifier (43-128 chars) and code_challenge (S256)
+  const codeVerifier = crypto.randomBytes(32).toString('base64url');
+  const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+
   req.session.oauthState = state;
+  req.session.pkceVerifier = codeVerifier;
+
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID,
     scope: 'repo',
     state,
     redirect_uri: GITHUB_CALLBACK_URL,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
   const githubUrl = `https://github.com/login/oauth/authorize?${params.toString()}`;
   req.session.save((err) => {
@@ -164,7 +186,7 @@ router.get('/oauth', (req, res) => {
   });
 });
 
-// GET /api/github/callback - OAuth callback
+// GET /api/github/callback - OAuth callback with PKCE
 router.get('/callback', async (req, res) => {
   const { code, state, error, error_description: errorDescription } = req.query;
 
@@ -193,10 +215,20 @@ router.get('/callback', async (req, res) => {
     return res.redirect(buildAuthRedirectPath('404', query));
   }
 
+  const codeVerifier = req.session.pkceVerifier;
+  if (!codeVerifier) {
+    const query = new URLSearchParams({
+      reason: 'missing_pkce_verifier',
+      message: 'PKCE code verifier not found in session.',
+    }).toString();
+    return res.redirect(buildAuthRedirectPath('404', query));
+  }
+
   try {
-    const tokenResult = await exchangeCodeForToken(code, req.sessionID, state);
+    const tokenResult = await exchangeCodeForToken(code, req.sessionID, state, codeVerifier);
     req.session.githubConnected = true;
     delete req.session.oauthState;
+    delete req.session.pkceVerifier;
 
     req.session.save((saveErr) => {
       if (saveErr) {
@@ -216,115 +248,85 @@ router.get('/callback', async (req, res) => {
 });
 
 // GET /api/github/user - Authenticated user profile
-router.get('/user', async (req, res) => {
-  try {
-    if (!ensureGitHubSession(req, res)) return;
+router.get('/user', asyncHandler(async (req, res) => {
+  if (!ensureGitHubSession(req, res)) return;
 
-    const user = await getAuthenticatedUser(req.sessionID);
-    res.json(user);
-  } catch (err) {
-    console.error('User error:', err);
-    res.status(err.status === 401 ? 401 : 500).json({ error: err.message });
-  }
-});
+  const user = await getAuthenticatedUser(req.sessionID);
+  res.json(user);
+}));
 
 // GET /api/github/repos - List user repos (req.sessionID for auth)
-router.get('/repos', async (req, res) => {
-  try {
-    if (!ensureGitHubSession(req, res)) return;
+router.get('/repos', asyncHandler(async (req, res) => {
+  if (!ensureGitHubSession(req, res)) return;
 
-    const repos = await getUserRepos(req.sessionID);
-    res.json({ repos });
-  } catch (err) {
-    console.error('Repos error:', err);
-    res.status(err.status === 401 ? 401 : 500).json({ error: err.message });
-  }
-});
+  const repos = await getUserRepos(req.sessionID);
+  res.json({ repos });
+}));
 
 // GET /api/github/repo-files?repo=owner/repo
-router.get('/repo-files', async (req, res) => {
+router.get('/repo-files', asyncHandler(async (req, res) => {
   const { repo } = req.query;
-  if (!repo) return res.status(400).json({ error: 'repo param required' });
+  if (!repo) throw new AppError('repo param required', 400, 'VALIDATION_ERROR');
 
-  try {
-    validateRepoName(repo);
-    if (!ensureGitHubSession(req, res)) return;
+  validateRepoName(repo);
+  if (!ensureGitHubSession(req, res)) return;
 
-    const files = await getRepoFiles(req.sessionID, repo);
-    res.json({ files });
-  } catch (err) {
-    console.error('Repo files error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const files = await getRepoFiles(req.sessionID, repo);
+  res.json({ files });
+}));
 
 // GET /api/github/file?repo=owner/repo&path=...
-router.get('/file', async (req, res) => {
+router.get('/file', asyncHandler(async (req, res) => {
   const { repo, path: filePath } = req.query;
-  if (!repo || !filePath) return res.status(400).json({ error: 'repo and path required' });
+  if (!repo || !filePath) throw new AppError('repo and path required', 400, 'VALIDATION_ERROR');
 
-  try {
-    validateRepoName(repo);
-    validateFilePath(filePath);
-    if (!ensureGitHubSession(req, res)) return;
+  validateRepoName(repo);
+  validateFilePath(filePath);
+  if (!ensureGitHubSession(req, res)) return;
 
-    const content = await getFileContent(req.sessionID, repo, filePath);
-    res.json({ content, path: filePath });
-  } catch (err) {
-    console.error('File error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const content = await getFileContent(req.sessionID, repo, filePath);
+  res.json({ content, path: filePath });
+}));
 
 // POST /api/github/analyze-file {repo, filePath, type: 'review|analyse'}
-router.post('/analyze-file', async (req, res) => {
+router.post('/analyze-file', asyncHandler(async (req, res) => {
   const { repo, filePath, type = 'review', language } = req.body;
-  if (!repo || !filePath) return res.status(400).json({ error: 'repo and filePath required' });
+  if (!repo || !filePath) throw new AppError('repo and filePath required', 400, 'VALIDATION_ERROR');
 
-  try {
-    validateRepoName(repo);
-    validateFilePath(filePath);
-    if (!ensureGitHubSession(req, res)) return;
+  validateRepoName(repo);
+  validateFilePath(filePath);
+  if (!ensureGitHubSession(req, res)) return;
 
-    const content = await getFileContent(req.sessionID, repo, filePath);
-    let aiResult;
-    if (type === 'analyse') {
-      aiResult = await analyseCode(content, language);
-    } else {
-      aiResult = await reviewCode(content, language);
-    }
-    res.json({
-      ...aiResult,
-      repo,
-      filePath,
-      message: `Analysis complete for ${filePath}`,
-    });
-  } catch (err) {
-    console.error('Analyze file error:', err);
-    res.status(500).json({ error: err.message });
+  const content = await getFileContent(req.sessionID, repo, filePath);
+  let aiResult;
+  if (type === 'analyse') {
+    aiResult = await analyseCode(content, language);
+  } else {
+    aiResult = await reviewCode(content, language);
   }
-});
+  res.json({
+    ...aiResult,
+    repo,
+    filePath,
+    message: `Analysis complete for ${filePath}`,
+  });
+}));
 
 // GET /api/github/prs?repo=owner/repo
-router.get('/prs', async (req, res) => {
+router.get('/prs', asyncHandler(async (req, res) => {
   const { repo, state = 'open' } = req.query;
-  if (!repo) return res.status(400).json({ error: 'repo param required' });
+  if (!repo) throw new AppError('repo param required', 400, 'VALIDATION_ERROR');
 
-  try {
-    validateRepoName(repo);
-    if (!ensureGitHubSession(req, res)) return;
+  validateRepoName(repo);
+  if (!(await ensureGitHubSession(req, res))) return;
 
-    const prs = await getPullRequests(req.sessionID, repo, state);
-    res.json({ prs });
-  } catch (err) {
-    console.error('PRs error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const prs = await getPullRequests(req.sessionID, repo, state);
+  res.json({ prs });
+}));
 
 // GET /api/github/status
-router.get('/status', (req, res) => {
-  const hasToken = !!getUserToken(req.sessionID);
+router.get('/status', asyncHandler(async (req, res) => {
+  const hasToken = !!(await getUserToken(req.sessionID));
   if (!hasToken && req.session.githubConnected) {
     req.session.githubConnected = false;
   }
@@ -334,82 +336,77 @@ router.get('/status', (req, res) => {
     sessionId: req.sessionID,
     hasToken,
   });
-});
+}));
 
 // POST /api/github/logout - Full backend logout
-router.post('/logout', async (req, res) => {
-  const { removeUserToken } = require('../services/githubService');
-  const userId = req.session.userId;
+router.post('/logout', asyncHandler(async (req, res) => {
+  const sessionId = req.sessionID;
   
-  if (userId) {
-    removeUserToken(userId);
+  if (!sessionId) {
+    throw new AppError('No active session', 400, 'VALIDATION_ERROR');
   }
+  
+  // Validate session exists before logout
+  const hasToken = !!(await getUserToken(sessionId));
+  if (!hasToken && !req.session.githubConnected) {
+    throw new AppError('Unauthorized - no active GitHub session', 401, 'UNAUTHORIZED');
+  }
+  
+  await removeUserToken(sessionId);
   
   res.clearCookie('gh_connected');
   res.clearCookie('connect.sid');
   
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Session destroy error:', err);
-      return res.status(500).json({ error: 'Failed to logout' });
-    }
-    res.json({ success: true });
+  await new Promise((resolve, reject) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+        reject(new AppError('Failed to logout', 500, 'SESSION_DESTROY_ERROR'));
+      } else {
+        resolve();
+      }
+    });
   });
-});
+  
+  res.json({ success: true });
+}));
 
 // GET /api/github/repos/:owner/:repo - Fetch repository details
-router.get('/repos/:owner/:repo', async (req, res) => {
+router.get('/repos/:owner/:repo', asyncHandler(async (req, res) => {
   const { owner, repo } = req.params;
 
-  try {
-    validateOwnerAndRepo(owner, repo);
-    if (!ensureGitHubSession(req, res)) return;
+  validateOwnerAndRepo(owner, repo);
+  if (!(await ensureGitHubSession(req, res))) return;
 
-    const repository = await getRepository(req.sessionID, owner, repo);
-    res.json({ repository });
-  } catch (err) {
-    console.error('Repo detail error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const repository = await getRepository(req.sessionID, owner, repo);
+  res.json({ repository });
+}));
 
 // GET /api/github/repos/:owner/:repo/files - Fetch repository file tree
-router.get('/repos/:owner/:repo/files', async (req, res) => {
+router.get('/repos/:owner/:repo/files', asyncHandler(async (req, res) => {
   const { owner, repo } = req.params;
 
-  try {
-    validateOwnerAndRepo(owner, repo);
-    if (!ensureGitHubSession(req, res)) return;
+  validateOwnerAndRepo(owner, repo);
+  if (!(await ensureGitHubSession(req, res))) return;
 
-    const files = await getRepoFiles(req.sessionID, `${owner}/${repo}`);
-    res.json({ files });
-  } catch (err) {
-    console.error('Repo files by params error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const files = await getRepoFiles(req.sessionID, `${owner}/${repo}`);
+  res.json({ files });
+}));
 
 // GET /api/github/repos/:owner/:repo/file/* - Fetch file content by path
-router.get('/repos/:owner/:repo/file/*', async (req, res) => {
+router.get('/repos/:owner/:repo/file/*', asyncHandler(async (req, res) => {
   const { owner, repo } = req.params;
   const filePath = req.params[0];
 
-  if (!filePath) {
-    return res.status(400).json({ error: 'file path required' });
-  }
+  if (!filePath) throw new AppError('file path required', 400, 'VALIDATION_ERROR');
 
-  try {
-    validateOwnerAndRepo(owner, repo);
-    validateFilePath(filePath);
-    if (!ensureGitHubSession(req, res)) return;
+  validateOwnerAndRepo(owner, repo);
+  validateFilePath(filePath);
+  if (!(await ensureGitHubSession(req, res))) return;
 
-    const content = await getFileContent(req.sessionID, `${owner}/${repo}`, filePath);
-    res.json({ content, path: filePath });
-  } catch (err) {
-    console.error('Repo file by params error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const content = await getFileContent(req.sessionID, `${owner}/${repo}`, filePath);
+  res.json({ content, path: filePath });
+}));
 
 module.exports = router;
 

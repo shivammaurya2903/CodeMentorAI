@@ -1,8 +1,10 @@
 require('dotenv').config();
 const { Octokit } = require('@octokit/rest');
 
-const userTokens = new Map(); // In-memory store: sessionId -> {access_token, user}
+const userTokens = new Map(); // In-memory fallback store: sessionId -> {access_token, user}
+const MAX_TOKENS = 10000; // Prevent memory exhaustion
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const REDIS_TOKEN_PREFIX = 'github_token:';
 
 // Config from env
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
@@ -12,14 +14,87 @@ if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
   console.warn('⚠️ GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET not set in .env');
 }
 
-function setUserToken(sessionId, accessToken) {
-  userTokens.set(sessionId, {
-    access_token: accessToken,
-    createdAt: Date.now(),
-  });
+// Lazy Redis client initialization
+let redisClient = null;
+function getRedisClient() {
+  if (!redisClient && process.env.REDIS_URL) {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: process.env.REDIS_URL });
+    redisClient.on('error', (err) => console.error('Redis token store error:', err));
+    redisClient.connect().catch((err) => console.error('Redis token store connection failed:', err));
+  }
+  return redisClient;
 }
 
-function getUserToken(sessionId) {
+async function setUserTokenRedis(sessionId, accessToken) {
+  const client = getRedisClient();
+  if (!client) return false;
+  try {
+    const data = JSON.stringify({ access_token: accessToken, createdAt: Date.now() });
+    await client.setEx(`${REDIS_TOKEN_PREFIX}${sessionId}`, Math.floor(TOKEN_TTL_MS / 1000), data);
+    return true;
+  } catch (err) {
+    console.error('Redis setUserToken error:', err);
+    return false;
+  }
+}
+
+async function getUserTokenRedis(sessionId) {
+  const client = getRedisClient();
+  if (!client) return null;
+  try {
+    const data = await client.get(`${REDIS_TOKEN_PREFIX}${sessionId}`);
+    if (!data) return null;
+    const parsed = JSON.parse(data);
+    const age = Date.now() - (parsed.createdAt || 0);
+    if (age > TOKEN_TTL_MS) {
+      await client.del(`${REDIS_TOKEN_PREFIX}${sessionId}`);
+      return null;
+    }
+    return parsed;
+  } catch (err) {
+    console.error('Redis getUserToken error:', err);
+    return null;
+  }
+}
+
+async function removeUserTokenRedis(sessionId) {
+  const client = getRedisClient();
+  if (!client) return false;
+  try {
+    await client.del(`${REDIS_TOKEN_PREFIX}${sessionId}`);
+    return true;
+  } catch (err) {
+    console.error('Redis removeUserToken error:', err);
+    return false;
+  }
+}
+
+function setUserToken(sessionId, accessToken) {
+  // Try Redis first, fallback to memory
+  const redisSuccess = setUserTokenRedis(sessionId, accessToken);
+  if (!redisSuccess) {
+    // Enforce max size to prevent memory leaks
+    if (userTokens.size >= MAX_TOKENS) {
+      const entries = [...userTokens.entries()];
+      entries.sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
+      const toRemove = entries.slice(0, Math.floor(MAX_TOKENS * 0.1));
+      for (const [key] of toRemove) {
+        userTokens.delete(key);
+      }
+    }
+    userTokens.set(sessionId, {
+      access_token: accessToken,
+      createdAt: Date.now(),
+    });
+  }
+}
+
+async function getUserToken(sessionId) {
+  // Try Redis first, fallback to memory
+  const redisData = await getUserTokenRedis(sessionId);
+  if (redisData) return redisData;
+
   const userData = userTokens.get(sessionId);
   if (!userData?.access_token) {
     return null;
@@ -34,6 +109,11 @@ function getUserToken(sessionId) {
   return userData;
 }
 
+async function removeUserToken(sessionId) {
+  await removeUserTokenRedis(sessionId);
+  userTokens.delete(sessionId);
+}
+
 function cleanupExpiredTokens() {
   const now = Date.now();
   for (const [sessionId, userData] of userTokens.entries()) {
@@ -46,10 +126,20 @@ function cleanupExpiredTokens() {
 
 setInterval(cleanupExpiredTokens, 60 * 60 * 1000).unref();
 
-// GitHub OAuth token exchange (server-side)
-async function exchangeCodeForToken(code, sessionId, state) {
+// GitHub OAuth token exchange (server-side) with PKCE
+async function exchangeCodeForToken(code, sessionId, state, codeVerifier) {
   if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
     throw new Error('GitHub app credentials not configured');
+  }
+
+  const body = {
+    client_id: GITHUB_CLIENT_ID,
+    client_secret: GITHUB_CLIENT_SECRET,
+    code,
+    state,
+  };
+  if (codeVerifier) {
+    body.code_verifier = codeVerifier;
   }
 
   const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
@@ -58,12 +148,7 @@ async function exchangeCodeForToken(code, sessionId, state) {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      client_id: GITHUB_CLIENT_ID,
-      client_secret: GITHUB_CLIENT_SECRET,
-      code,
-      state,
-    }),
+    body: JSON.stringify(body),
   });
 
   const tokenData = await tokenResponse.json();
@@ -241,6 +326,7 @@ module.exports = {
   getPullRequests,
   getUserToken,
   setUserToken,
+  removeUserToken,
   userTokens, // exposed for routes
 };
 

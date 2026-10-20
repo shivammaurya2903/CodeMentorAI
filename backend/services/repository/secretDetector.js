@@ -16,6 +16,24 @@ const SECRET_PATTERNS = [
   { name: 'Generic Secret Token Assignment', regex: /(?:api_key|apikey|secret|password|passwd|auth_token|access_token|private_key)\s*[:=]\s*["']([^"'\s]{8,})["']/gi, label: 'CONFIDENTIAL_SECRET' },
   { name: 'Database Connection String', regex: /(?:mongodb(?:\+srv)?|postgres|postgresql|mysql|redis):\/\/[^:\s]+:[^@\s]+@[^\s"']+/gi, label: 'DATABASE_URI' },
   { name: 'JWT Token', regex: /eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g, label: 'JWT_TOKEN' },
+  // Azure
+  { name: 'Azure Storage Account Key', regex: /[A-Za-z0-9/+=]{88}/g, label: 'AZURE_STORAGE_KEY' },
+  { name: 'Azure SAS Token', regex: /\?sv=\d{4}-\d{2}-\d{2}&[^&\s]*/g, label: 'AZURE_SAS_TOKEN' },
+  { name: 'Azure Client Secret', regex: /[A-Za-z0-9._~-]{40,}/g, label: 'AZURE_CLIENT_SECRET' },
+  // Google Cloud
+  { name: 'GCP Service Account Key', regex: /"type":\s*"service_account"/g, label: 'GCP_SERVICE_ACCOUNT' },
+  { name: 'GCP API Key', regex: /AIza[0-9A-Za-z_-]{35}/g, label: 'GCP_API_KEY' },
+  { name: 'GCP OAuth Token', regex: /ya29\.[0-9A-Za-z_-]+/g, label: 'GCP_OAUTH_TOKEN' },
+  // Slack
+  { name: 'Slack Bot Token', regex: /xoxb-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{24}/g, label: 'SLACK_BOT_TOKEN' },
+  { name: 'Slack User Token', regex: /xoxp-[0-9]{10,}-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{24}/g, label: 'SLACK_USER_TOKEN' },
+  { name: 'Slack Webhook URL', regex: /https:\/\/hooks\.slack\.com\/services\/[A-Z0-9]+\/[A-Z0-9]+\/[A-Za-z0-9]+/g, label: 'SLACK_WEBHOOK' },
+  // Discord
+  { name: 'Discord Bot Token', regex: /[MN][A-Za-z\d]{23}\.[\w-]{6}\.[\w-]{27}/g, label: 'DISCORD_BOT_TOKEN' },
+  { name: 'Discord Webhook', regex: /https:\/\/discord(?:app)?\.com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+/g, label: 'DISCORD_WEBHOOK' },
+  // Generic
+  { name: 'Private SSH Key', regex: /-----BEGIN OPENSSH PRIVATE KEY-----[\s\S]*?-----END OPENSSH PRIVATE KEY-----/g, label: 'SSH_PRIVATE_KEY' },
+  { name: 'PGP Private Key', regex: /-----BEGIN PGP PRIVATE KEY BLOCK-----[\s\S]*?-----END PGP PRIVATE KEY BLOCK-----/g, label: 'PGP_PRIVATE_KEY' },
 ];
 
 const SENSITIVE_FILENAME_PATTERNS = [
@@ -30,6 +48,12 @@ const SENSITIVE_FILENAME_PATTERNS = [
   /credentials\.json$/i,
   /secrets\.yml$/i,
   /secrets\.yaml$/i,
+  /.*\.jks$/i,
+  /.*\.keystore$/i,
+  /.*\.p12$/i,
+  /gcp.*\.json$/i,
+  /service-account.*\.json$/i,
+  /firebase.*\.json$/i,
 ];
 
 /**

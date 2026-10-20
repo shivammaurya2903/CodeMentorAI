@@ -15,6 +15,7 @@
     "connect-redis": "^7.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "csurf": "^1.11.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.1.5",
@@ -28,6 +29,7 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^3.1.4",
+    "pino-pretty": "^13.2.0",
     "supertest": "^7.0.0"
   }
 }

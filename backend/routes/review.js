@@ -1,29 +1,23 @@
 const express = require("express");
 const router = express.Router();
 const { reviewCode } = require("../services/aiService");
+const { AppError, asyncHandler } = require("../utils/errorHandler");
 
-router.post("/", async (req, res) => {
-  try {
-    const { code, language } = req.body;
+router.post("/", asyncHandler(async (req, res) => {
+  const { code, language } = req.body;
 
-    if (!code || typeof code !== "string") {
-      return res.status(400).json({ error: "Valid code is required" });
-    }
-    
-    const MAX_CODE_LENGTH = 50000; // characters
-    if (code.length > MAX_CODE_LENGTH) {
-      return res.status(413).json({ 
-        error: `Code too large. Maximum ${MAX_CODE_LENGTH} characters allowed.`
-      });
-    }
-
-    const response = await reviewCode(code, language);
-
-    res.json(response);
-  } catch (err) {
-    console.error("Review error:", err);
-    res.status(500).json({ error: "Review service failed. Check API key." });
+  if (!code || typeof code !== "string") {
+    throw new AppError("Valid code is required", 400, "VALIDATION_ERROR");
   }
-});
+  
+  const MAX_CODE_LENGTH = 50000;
+  if (code.length > MAX_CODE_LENGTH) {
+    throw new AppError(`Code too large. Maximum ${MAX_CODE_LENGTH} characters allowed.`, 413, "PAYLOAD_TOO_LARGE");
+  }
+
+  const response = await reviewCode(code, language);
+
+  res.json(response);
+}));
 
 module.exports = router;

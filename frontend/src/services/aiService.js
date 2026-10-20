@@ -55,7 +55,7 @@ export const aiService = {
   },
 
   async analyseCode(code, language = 'javascript', issue = '') {
-    const raw = await api.post('/api/analyse', { code, language, issue });
+    const raw = await api.post('/api/analysis', { code, language, issue });
     return normalizeAnalysisResponse(raw);
   },
 

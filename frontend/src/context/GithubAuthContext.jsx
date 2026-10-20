@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { githubService } from '../services/githubService';
+import { api } from '../services/api';
 
 const GithubAuthContext = createContext({
   connected: false,
@@ -56,7 +57,7 @@ export function GithubAuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      await githubService.post('/api/github/logout');
+      await api.post('/api/github/logout');
     } catch (err) {
       console.error('Backend logout error:', err);
     }
