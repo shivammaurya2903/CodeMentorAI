@@ -2,6 +2,7 @@
  * Centralized API Base URL Configuration
  */
 export function getApiBaseUrl() {
+  // In production, require explicit VITE_API_BASE_URL
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '');
   }
@@ -14,13 +15,15 @@ export function getApiBaseUrl() {
       hostname.endsWith('.local') ||
       /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
 
-    if (isLocalHost) {
+    // Only allow localhost fallback in development
+    if (isLocalHost && import.meta.env.MODE !== 'production') {
       // Use the same port as the backend, or default to 5000
       const apiPort = port || '5000';
       return `${protocol}//${hostname}:${apiPort}`;
     }
   }
 
+  // In production without explicit config, return empty to force error
   return '';
 }
 

@@ -4,6 +4,9 @@ const { buildChatPrompt, buildReviewPrompt, buildSecurityPrompt, buildPerformanc
 const { sanitizeChatResponse, sanitizeReviewResponse, sanitizeSecurityResponse, sanitizePerformanceResponse, sanitizePatchResponse } = require("./ai/responseValidator");
 const { redactSecrets } = require("./repository/secretDetector");
 const { buildContext } = require("./repository/contextBuilder");
+const pino = require('pino');
+
+const logger = pino({ name: 'aiService' });
 
 const openai = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
@@ -66,11 +69,11 @@ function isGroqJsonGenerationError(error) {
 }
 
 function logGroqError(error) {
-  console.error("Groq API error:", JSON.stringify({
+  logger.error({
     message: error.message,
     status: error.status,
     timestamp: new Date().toISOString(),
-  }, null, 2));
+  }, 'Groq API error');
 }
 
 function getGroqModel() {

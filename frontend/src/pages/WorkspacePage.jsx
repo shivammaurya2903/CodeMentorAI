@@ -75,7 +75,7 @@ export function WorkspacePage() {
       const data = await githubService.getUserRepos();
       setRepos(data);
     } catch (err) {
-      console.error('Failed to load repos:', err);
+      // Silently handle error in production; UI displays error state
       setError('Could not fetch GitHub repositories. Try reconnecting your GitHub account.');
     } finally {
       setLoadingRepos(false);
@@ -103,7 +103,6 @@ export function WorkspacePage() {
       const status = await githubService.getRepositoryStatus(repoName);
       setIndexStatus(status.indexed ? status : null);
     } catch (err) {
-      console.error('Failed to fetch repo files:', err);
       setError(err.message || 'Unable to fetch repository tree.');
     } finally {
       setLoadingFiles(false);
@@ -138,8 +137,8 @@ export function WorkspacePage() {
     try {
       const res = await githubService.searchRepository(selectedRepo, searchQuery);
       setSearchResults(res.results || []);
-    } catch (err) {
-      console.error('Search failed:', err);
+    } catch {
+      // Search failure is non-critical; UI remains functional
     } finally {
       setSearching(false);
     }
@@ -173,7 +172,6 @@ export function WorkspacePage() {
       const content = await githubService.getFileContent(selectedRepo, path);
       setFileContent(content);
     } catch (err) {
-      console.error('Failed to load file content:', err);
       setFileContent(`// Error loading file content: ${err.message}`);
     } finally {
       setLoadingContent(false);
@@ -188,7 +186,6 @@ export function WorkspacePage() {
       const res = await githubService.analyzeRepoFile(selectedRepo, selectedFile, type);
       setAnalysisResult(res);
     } catch (err) {
-      console.error('Analysis failed:', err);
       setError(`AI analysis failed: ${err.message}`);
     } finally {
       setAnalyzing(false);

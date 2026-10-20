@@ -1,5 +1,8 @@
 require('dotenv').config();
 const { Octokit } = require('@octokit/rest');
+const pino = require('pino');
+
+const logger = pino({ name: 'githubService' });
 
 const userTokens = new Map(); // In-memory fallback store: sessionId -> {access_token, user}
 const MAX_TOKENS = 10000; // Prevent memory exhaustion
@@ -11,7 +14,7 @@ const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 
 if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
-  console.warn('⚠️ GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET not set in .env');
+  logger.warn('GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET not set in .env');
 }
 
 // Lazy Redis client initialization
@@ -20,8 +23,8 @@ function getRedisClient() {
   if (!redisClient && process.env.REDIS_URL) {
     const { createClient } = require('redis');
     redisClient = createClient({ url: process.env.REDIS_URL });
-    redisClient.on('error', (err) => console.error('Redis token store error:', err));
-    redisClient.connect().catch((err) => console.error('Redis token store connection failed:', err));
+    redisClient.on('error', (err) => logger.error({ err }, 'Redis token store error'));
+    redisClient.connect().catch((err) => logger.error({ err }, 'Redis token store connection failed'));
   }
   return redisClient;
 }
@@ -34,7 +37,7 @@ async function setUserTokenRedis(sessionId, accessToken) {
     await client.setEx(`${REDIS_TOKEN_PREFIX}${sessionId}`, Math.floor(TOKEN_TTL_MS / 1000), data);
     return true;
   } catch (err) {
-    console.error('Redis setUserToken error:', err);
+    logger.error({ err }, 'Redis setUserToken error');
     return false;
   }
 }
@@ -53,7 +56,7 @@ async function getUserTokenRedis(sessionId) {
     }
     return parsed;
   } catch (err) {
-    console.error('Redis getUserToken error:', err);
+    logger.error({ err }, 'Redis getUserToken error');
     return null;
   }
 }
@@ -65,7 +68,7 @@ async function removeUserTokenRedis(sessionId) {
     await client.del(`${REDIS_TOKEN_PREFIX}${sessionId}`);
     return true;
   } catch (err) {
-    console.error('Redis removeUserToken error:', err);
+    logger.error({ err }, 'Redis removeUserToken error');
     return false;
   }
 }

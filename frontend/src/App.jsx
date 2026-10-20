@@ -26,7 +26,10 @@ class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Uncaught React UI error:', error, errorInfo);
+    // Error boundary logging - in production, integrate with error tracking service (e.g., Sentry)
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Uncaught React UI error:', error, errorInfo);
+    }
   }
 
   render() {

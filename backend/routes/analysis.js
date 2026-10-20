@@ -6,6 +6,8 @@ const { analyzeArchitecture } = require('../services/analysis/architectureAnalyz
 const { generateProjectHealthScorecard } = require('../services/reporting/healthDashboardService');
 const { generateSecurityAudit, generatePerformanceAudit } = require('../services/aiService');
 const { AppError, asyncHandler } = require('../utils/errorHandler');
+const pino = require('pino');
+const logger = pino({ name: 'analysisRoutes' });
 
 const router = express.Router();
 
@@ -27,7 +29,7 @@ router.post('/security', asyncHandler(async (req, res) => {
     try {
       aiFindings = await generateSecurityAudit(code, filePath);
     } catch (err) {
-      console.warn('AI Security Audit fallback to static:', err.message);
+      logger.warn({ err }, 'AI Security Audit fallback to static');
     }
   }
 
@@ -58,7 +60,7 @@ router.post('/performance', asyncHandler(async (req, res) => {
     try {
       aiFindings = await generatePerformanceAudit(code, filePath);
     } catch (err) {
-      console.warn('AI Performance Audit fallback to static:', err.message);
+      logger.warn({ err }, 'AI Performance Audit fallback to static');
     }
   }
 

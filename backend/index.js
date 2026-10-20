@@ -48,6 +48,11 @@ const { handleError } = require("./utils/errorHandler");
 
 const app = express();
 
+// Trust proxy for production (required for secure cookies behind load balancer)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Structured HTTP logging
 app.use(pinoHttp({ logger }));
 
@@ -88,7 +93,15 @@ const defaultOrigins = [
 const envOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim()).filter(Boolean)
   : [];
-const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
+// In production, ONLY allow FRONTEND_URL; in development, allow defaults + env
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? envOrigins
+  : Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
+if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+  logger.warn('FRONTEND_URL not set in production; CORS will reject all origins');
+}
 
 app.use(cors({
   origin(origin, callback) {
@@ -145,7 +158,9 @@ if (!process.env.SESSION_SECRET) {
   logger.warn('SESSION_SECRET not set in environment. Using development fallback.');
 }
 
-const sessionSecret = process.env.SESSION_SECRET || 'dev-session-secret-fallback-key';
+const sessionSecret = isProduction
+  ? process.env.SESSION_SECRET
+  : (process.env.SESSION_SECRET || 'dev-session-secret-fallback-key');
 
 const RedisStore = require('connect-redis').default;
 const { createClient } = require('redis');
@@ -292,7 +307,7 @@ app.use(handleError);
 if (require.main === module) {
   const port = process.env.PORT || 5000;
   app.listen(port, '0.0.0.0', () => {
-    console.log(`✅ CodeMentorAI Backend running on port ${port}`);
+    logger.info({ port }, 'CodeMentorAI Backend running');
   });
 }
 

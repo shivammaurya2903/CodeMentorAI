@@ -15,6 +15,8 @@ const {
   removeUserToken,
 } = require('../services/githubService');
 const { AppError, asyncHandler } = require('../utils/errorHandler');
+const pino = require('pino');
+const logger = pino({ name: 'githubRoutes' });
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5500';
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL || 'http://localhost:5000/auth/github/callback';
@@ -232,13 +234,13 @@ router.get('/callback', async (req, res) => {
 
     req.session.save((saveErr) => {
       if (saveErr) {
-        console.error('Session save error:', saveErr);
+        logger.error({ err: saveErr }, 'Session save error');
       }
       const redirectUrl = buildAuthRedirectPath('success', new URLSearchParams({ connected: '1' }).toString());
       res.redirect(redirectUrl);
     });
   } catch (err) {
-    console.error('OAuth callback error:', err.message);
+    logger.error({ err }, 'OAuth callback error');
     const query = new URLSearchParams({
       reason: 'token_exchange_failed',
       message: 'GitHub authentication could not be completed.',
@@ -360,7 +362,7 @@ router.post('/logout', asyncHandler(async (req, res) => {
   await new Promise((resolve, reject) => {
     req.session.destroy((err) => {
       if (err) {
-        console.error('Session destroy error:', err);
+        logger.error({ err }, 'Session destroy error');
         reject(new AppError('Failed to logout', 500, 'SESSION_DESTROY_ERROR'));
       } else {
         resolve();

@@ -1,5 +1,8 @@
 require("dotenv").config();
 const OpenAI = require("openai");
+const pino = require('pino');
+
+const logger = pino({ name: 'groqService' });
 
 /**
  * Groq AI Service Provider
@@ -35,12 +38,12 @@ function getGroqModel() {
 }
 
 function logGroqError(error) {
-  console.error("❌ Groq API Technical Error:", JSON.stringify({
+  logger.error({
     message: error?.message || 'Unknown Groq error',
     status: error?.status || 500,
     code: error?.code || 'GROQ_ERROR',
     timestamp: new Date().toISOString(),
-  }, null, 2));
+  }, 'Groq API Technical Error');
 }
 
 function isGroqJsonGenerationError(error) {

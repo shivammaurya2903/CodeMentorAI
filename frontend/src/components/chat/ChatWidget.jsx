@@ -39,8 +39,8 @@ export function ChatWidget() {
   useEffect(() => {
     try {
       localStorage.setItem('ai_chat_history', JSON.stringify(messages));
-    } catch (e) {
-      console.warn('Could not save chat history:', e);
+    } catch {
+      // Silently ignore localStorage quota/permission errors
     }
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
