@@ -4,12 +4,29 @@ const { runStaticSecurityScan } = require('../services/analysis/securityAnalyzer
 const { runStaticPerformanceScan } = require('../services/analysis/performanceAnalyzer');
 const { analyzeArchitecture } = require('../services/analysis/architectureAnalyzer');
 const { generateProjectHealthScorecard } = require('../services/reporting/healthDashboardService');
-const { generateSecurityAudit, generatePerformanceAudit } = require('../services/aiService');
+const { generateSecurityAudit, generatePerformanceAudit, analyseCode } = require('../services/aiService');
 const { AppError, asyncHandler } = require('../utils/errorHandler');
 const pino = require('pino');
 const logger = pino({ name: 'analysisRoutes' });
 
 const router = express.Router();
+
+// POST /api/analysis { code, language, issue } - Code defect & root-cause analysis
+router.post('/', asyncHandler(async (req, res) => {
+  const { code, language = 'javascript', issue = '' } = req.body;
+
+  if (!code || typeof code !== 'string') {
+    throw new AppError('Valid code is required', 400, 'VALIDATION_ERROR');
+  }
+
+  const MAX_CODE_LENGTH = 50000;
+  if (code.length > MAX_CODE_LENGTH) {
+    throw new AppError(`Code too large. Maximum ${MAX_CODE_LENGTH} characters allowed.`, 413, 'PAYLOAD_TOO_LARGE');
+  }
+
+  const result = await analyseCode(code, language, issue);
+  res.json(result);
+}));
 
 // POST /api/analysis/security { repo: 'owner/repo', code, filePath }
 router.post('/security', asyncHandler(async (req, res) => {

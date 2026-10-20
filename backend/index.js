@@ -209,8 +209,11 @@ app.use(session({
   cookie: {
     secure: isProduction,
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: isProduction ? 'lax' : 'lax',
     maxAge: 24 * 60 * 60 * 1000,
+    // In development, set domain to 'localhost' to allow cross-port cookie sharing
+    // This helps with frontend (localhost:5500) accessing backend (localhost:5000) session
+    ...(!isProduction && { domain: 'localhost' }),
   },
 }));
 
@@ -233,6 +236,7 @@ app.use("/api/review", aiLimiter, csrfProtection, reviewRoute);
 app.use("/api/github", githubRoute);
 app.use("/api/repository", csrfProtection, repositoryRoute);
 app.use("/api/analysis", aiLimiter, csrfProtection, analysisRoute);
+app.use("/api/analyse", aiLimiter, csrfProtection, analysisRoute);
 app.use("/api/fixes", aiLimiter, csrfProtection, fixesRoute);
 app.use("/api/reporting", reportingRoute);
 

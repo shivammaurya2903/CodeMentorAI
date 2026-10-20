@@ -7,6 +7,7 @@ const { validatePatchSyntax } = require('../services/fixes/patchValidator');
 jest.mock('../services/githubService', () => ({
   getUserToken: jest.fn().mockReturnValue(null),
   setUserToken: jest.fn(),
+  removeUserToken: jest.fn().mockResolvedValue(true),
   userTokens: new Map(),
   getRepoFiles: jest.fn().mockResolvedValue([{ path: 'backend/index.js' }]),
   getFileContent: jest.fn().mockResolvedValue('console.log("hello world");'),
@@ -146,6 +147,31 @@ describe('CodeMentorAI Advanced Platform Test Suite', () => {
       expect(res.statusCode).toEqual(200);
       expect(res.headers['content-type']).toContain('text/markdown');
       expect(res.text).toContain('# CodeMentorAI — Project Health & Engineering Report');
+    });
+
+    it('POST /api/analysis should analyze code and return defect analysis', async () => {
+      const res = await request(app).post('/api/analysis').send({
+        code: 'function test() { return 1; }',
+        language: 'javascript',
+      });
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toHaveProperty('analysis');
+      expect(res.body).toHaveProperty('fixed_code');
+    });
+
+    it('POST /api/analyse alias should also route to code defect analysis', async () => {
+      const res = await request(app).post('/api/analyse').send({
+        code: 'function test() { return 1; }',
+        language: 'javascript',
+      });
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toHaveProperty('analysis');
+    });
+
+    it('POST /api/github/logout should be idempotent and return success', async () => {
+      const res = await request(app).post('/api/github/logout');
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toHaveProperty('success', true);
     });
   });
 });

@@ -29,40 +29,16 @@ export default defineConfig(({ mode }) => {
       cssCodeSplit: true,
       rollupOptions: {
         output: {
-          manualChunks: {
-            // Vendor chunks
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-ui': ['lucide-react'],
-            // Feature chunks
-            'feature-chat': [
-              './src/components/chat/ChatWidget.jsx',
-              './src/components/chat/ChatMessage.jsx',
-              './src/components/chat/ChatInput.jsx',
-              './src/components/chat/AnswerModeSelector.jsx',
-              './src/components/chat/ContextSelector.jsx',
-            ],
-            'feature-review': [
-              './src/components/review/ReviewWorkspace.jsx',
-              './src/components/review/ScoreCard.jsx',
-              './src/components/review/IssueList.jsx',
-              './src/components/review/IssueCard.jsx',
-              './src/components/review/RefactoredCode.jsx',
-            ],
-            'feature-github': [
-              './src/components/github/RepositoryList.jsx',
-              './src/components/github/RepositoryCard.jsx',
-              './src/components/github/FileTree.jsx',
-              './src/components/github/ArchitectureViewer.jsx',
-              './src/components/github/GithubConnect.jsx',
-            ],
-            'feature-code': [
-              './src/components/code/CodeEditor.jsx',
-              './src/components/code/CodeViewer.jsx',
-              './src/components/code/LanguageSelector.jsx',
-            ],
-            'feature-fixes': [
-              './src/components/fixes/DiffViewer.jsx',
-            ],
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+                return 'vendor-react';
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-ui';
+              }
+              return 'vendor';
+            }
           },
         },
       },

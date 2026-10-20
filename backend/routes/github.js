@@ -133,16 +133,7 @@ function getFrontendBaseUrl() {
 
   try {
     const parsed = new URL(raw);
-    const isLocal5500 =
-      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') && parsed.port === '5500';
-    const isRootPath = !parsed.pathname || parsed.pathname === '/';
-
-    // In this project, Live Server often serves from workspace root, so app pages live under /frontend.
-    if (isLocal5500 && isRootPath) {
-      parsed.pathname = '/frontend';
-    }
-
-    return parsed.toString().replace(/\/$/, '');
+    return parsed.origin;
   } catch {
     return raw.replace(/\/$/, '');
   }
@@ -159,7 +150,7 @@ router.get('/oauth', (req, res) => {
   if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
     const frontendBase = getFrontendBaseUrl();
     return res.redirect(
-      `${frontendBase}/index.html?oauth_error=${encodeURIComponent('GitHub OAuth is not configured on the server.')}`
+      `${frontendBase}/auth/github/error?reason=${encodeURIComponent('GitHub OAuth credentials are not configured on the server.')}`
     );
   }
 
@@ -232,13 +223,19 @@ router.get('/callback', async (req, res) => {
     delete req.session.oauthState;
     delete req.session.pkceVerifier;
 
-    req.session.save((saveErr) => {
-      if (saveErr) {
-        logger.error({ err: saveErr }, 'Session save error');
-      }
-      const redirectUrl = buildAuthRedirectPath('success', new URLSearchParams({ connected: '1' }).toString());
-      res.redirect(redirectUrl);
+    // Ensure session is fully persisted before redirect
+    await new Promise((resolve, reject) => {
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          logger.error({ err: saveErr }, 'Session save error');
+          return reject(saveErr);
+        }
+        resolve();
+      });
     });
+
+    const redirectUrl = buildAuthRedirectPath('success', new URLSearchParams({ connected: '1' }).toString());
+    res.redirect(redirectUrl);
   } catch (err) {
     logger.error({ err }, 'OAuth callback error');
     const query = new URLSearchParams({
@@ -251,7 +248,7 @@ router.get('/callback', async (req, res) => {
 
 // GET /api/github/user - Authenticated user profile
 router.get('/user', asyncHandler(async (req, res) => {
-  if (!ensureGitHubSession(req, res)) return;
+  if (!(await ensureGitHubSession(req, res))) return;
 
   const user = await getAuthenticatedUser(req.sessionID);
   res.json(user);
@@ -259,7 +256,7 @@ router.get('/user', asyncHandler(async (req, res) => {
 
 // GET /api/github/repos - List user repos (req.sessionID for auth)
 router.get('/repos', asyncHandler(async (req, res) => {
-  if (!ensureGitHubSession(req, res)) return;
+  if (!(await ensureGitHubSession(req, res))) return;
 
   const repos = await getUserRepos(req.sessionID);
   res.json({ repos });
@@ -271,7 +268,7 @@ router.get('/repo-files', asyncHandler(async (req, res) => {
   if (!repo) throw new AppError('repo param required', 400, 'VALIDATION_ERROR');
 
   validateRepoName(repo);
-  if (!ensureGitHubSession(req, res)) return;
+  if (!(await ensureGitHubSession(req, res))) return;
 
   const files = await getRepoFiles(req.sessionID, repo);
   res.json({ files });
@@ -284,7 +281,7 @@ router.get('/file', asyncHandler(async (req, res) => {
 
   validateRepoName(repo);
   validateFilePath(filePath);
-  if (!ensureGitHubSession(req, res)) return;
+  if (!(await ensureGitHubSession(req, res))) return;
 
   const content = await getFileContent(req.sessionID, repo, filePath);
   res.json({ content, path: filePath });
@@ -297,7 +294,7 @@ router.post('/analyze-file', asyncHandler(async (req, res) => {
 
   validateRepoName(repo);
   validateFilePath(filePath);
-  if (!ensureGitHubSession(req, res)) return;
+  if (!(await ensureGitHubSession(req, res))) return;
 
   const content = await getFileContent(req.sessionID, repo, filePath);
   let aiResult;
@@ -343,33 +340,25 @@ router.get('/status', asyncHandler(async (req, res) => {
 // POST /api/github/logout - Full backend logout
 router.post('/logout', asyncHandler(async (req, res) => {
   const sessionId = req.sessionID;
-  
-  if (!sessionId) {
-    throw new AppError('No active session', 400, 'VALIDATION_ERROR');
+
+  if (sessionId) {
+    await removeUserToken(sessionId);
   }
-  
-  // Validate session exists before logout
-  const hasToken = !!(await getUserToken(sessionId));
-  if (!hasToken && !req.session.githubConnected) {
-    throw new AppError('Unauthorized - no active GitHub session', 401, 'UNAUTHORIZED');
-  }
-  
-  await removeUserToken(sessionId);
-  
+
   res.clearCookie('gh_connected');
   res.clearCookie('connect.sid');
-  
-  await new Promise((resolve, reject) => {
-    req.session.destroy((err) => {
-      if (err) {
-        logger.error({ err }, 'Session destroy error');
-        reject(new AppError('Failed to logout', 500, 'SESSION_DESTROY_ERROR'));
-      } else {
+
+  if (req.session) {
+    await new Promise((resolve) => {
+      req.session.destroy((err) => {
+        if (err) {
+          logger.warn({ err }, 'Session destroy warning during logout');
+        }
         resolve();
-      }
+      });
     });
-  });
-  
+  }
+
   res.json({ success: true });
 }));
 
