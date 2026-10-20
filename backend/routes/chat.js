@@ -1,23 +1,23 @@
 const express = require("express");
 const router = express.Router();
 const { chatWithAI } = require("../services/aiService");
-const { repositoryIndexer } = require("../services/repository/repositoryIndexer");
 const { AppError, asyncHandler } = require("../utils/errorHandler");
 
 router.post("/", asyncHandler(async (req, res) => {
-  const { message, code, language, mode = 'developer', scope = 'current_file', repo = '', selectedFiles = [] } = req.body;
+  const { message } = req.body;
 
   if (!message || typeof message !== "string") {
     throw new AppError("Valid message is required", 400, "VALIDATION_ERROR");
   }
 
-  const index = repo ? repositoryIndexer.getRepositoryIndex(repo) : null;
-
-  const response = await chatWithAI(message, code, language, {
-    mode,
-    scope,
-    index,
-    selectedFiles,
+  const response = await chatWithAI({
+    message: req.body.message,
+    code: req.body.code || req.body.context,
+    language: req.body.language || 'javascript',
+    history: req.body.history || [],
+    mode: req.body.mode || 'general',
+    scope: req.body.scope || 'file',
+    repoContext: req.body.repoContext,
   });
 
   res.json(response);

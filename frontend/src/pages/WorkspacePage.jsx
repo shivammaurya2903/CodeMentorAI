@@ -221,23 +221,36 @@ export function WorkspacePage() {
     setSendingChat(true);
 
     try {
+      const history = chatMessages
+        .filter((m) => m && m.content)
+        .slice(-10)
+        .map((m) => ({
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        }));
+
       const data = await api.post('/api/chat', {
         message: currentMsg,
         code: fileContent,
         language: 'javascript',
+        history,
         mode: answerMode,
         scope: contextScope,
         repo: selectedRepo,
       });
 
+      const replyText = typeof data?.reply === 'string'
+        ? data.reply
+        : (data?.reply ? JSON.stringify(data.reply, null, 2) : 'AI response unavailable.');
+
       setChatMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: data.reply,
-          cited_files: data.cited_files || [],
-          fix: data.fix,
-          improved_code: data.improved_code,
+          content: replyText,
+          cited_files: data?.cited_files || [],
+          fix: data?.fix,
+          improved_code: data?.improved_code,
         },
       ]);
     } catch (err) {
@@ -590,7 +603,12 @@ export function WorkspacePage() {
                         whiteSpace: 'pre-wrap',
                       }}
                     >
-                      {msg.content}
+                      {typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2)}
+                      {msg.improved_code && (
+                        <pre style={{ marginTop: '0.6rem', padding: '0.65rem 0.85rem', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', overflowX: 'auto', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)' }}>
+                          <code>{msg.improved_code}</code>
+                        </pre>
+                      )}
                       {msg.cited_files && msg.cited_files.length > 0 && (
                         <div style={{ marginTop: '0.5rem', fontSize: 'var(--text-sm)', color: 'var(--primary)', fontWeight: 'var(--fw-semibold)' }}>
                           Cites: {msg.cited_files.join(', ')}

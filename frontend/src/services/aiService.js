@@ -38,13 +38,41 @@ export function normalizeExplainResponse(data = {}) {
 }
 
 export function normalizeChatResponse(data = {}) {
+  let parsed = data;
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      parsed = { reply: data };
+    }
+  }
+
+  let replyText = parsed?.reply;
+  if (typeof replyText === 'object' && replyText !== null) {
+    replyText = replyText.reply || replyText.content || JSON.stringify(replyText, null, 2);
+  } else if (typeof replyText === 'string' && replyText.trim().startsWith('{') && replyText.trim().endsWith('}')) {
+    try {
+      const nested = JSON.parse(replyText);
+      if (nested?.reply) {
+        replyText = nested.reply;
+        if (!parsed.improved_code && nested.improved_code) {
+          parsed.improved_code = nested.improved_code;
+        }
+      }
+    } catch {}
+  }
+
   return {
-    reply: data.reply || (typeof data === 'string' ? data : 'AI response unavailable.'),
-    fix: data.fix || '',
-    improved_code: data.improved_code || data.refactored_code || '',
-    cited_files: Array.isArray(data.cited_files) ? data.cited_files : (Array.isArray(data.sources) ? data.sources : []),
-    mode: data.mode || '',
-    scope: data.scope || data.context_scope || '',
+    reply: replyText || (typeof parsed === 'string' ? parsed : 'AI response unavailable.'),
+    fix: parsed?.fix || '',
+    improved_code: parsed?.improved_code || parsed?.refactored_code || '',
+    cited_files: Array.isArray(parsed?.cited_files)
+      ? parsed.cited_files
+      : Array.isArray(parsed?.sources)
+      ? parsed.sources
+      : [],
+    mode: parsed?.mode || '',
+    scope: parsed?.scope || parsed?.context_scope || '',
   };
 }
 
@@ -65,7 +93,10 @@ export const aiService = {
   },
 
   async chatWithAI(message, code = '', language = 'javascript', options = {}) {
-    const raw = await api.post('/api/chat', { message, code, language, ...options });
+    const payload = typeof message === 'object' && message !== null
+      ? message
+      : { message, code, language, ...options };
+    const raw = await api.post('/api/chat', payload);
     return normalizeChatResponse(raw);
   },
 };

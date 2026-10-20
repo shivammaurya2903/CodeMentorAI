@@ -53,14 +53,52 @@ export function ChatWidget() {
     setLoading(true);
 
     try {
-      const response = await aiService.chatWithAI(text, '', 'javascript', { mode });
+      // Map history to strict format: [{ role: 'user' | 'assistant', content: string }]
+      const history = messages
+        .filter((m) => m && m.content)
+        .slice(-10)
+        .map((m) => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        }));
+
+      const response = await aiService.chatWithAI(text, '', 'javascript', {
+        mode,
+        history,
+      });
+
+      // Safely extract reply string even if backend returned structured JSON or nested object
+      let replyText = 'AI response unavailable.';
+      let improvedCode = '';
+      let fix = '';
+      let citedFiles = [];
+
+      if (response && typeof response === 'object') {
+        replyText = typeof response.reply === 'string'
+          ? response.reply
+          : (typeof response.content === 'string' ? response.content : JSON.stringify(response.reply || response, null, 2));
+        improvedCode = response.improved_code || response.refactored_code || '';
+        fix = response.fix || '';
+        citedFiles = Array.isArray(response.cited_files) ? response.cited_files : [];
+      } else if (typeof response === 'string') {
+        try {
+          const parsed = JSON.parse(response);
+          replyText = parsed.reply || parsed.content || response;
+          improvedCode = parsed.improved_code || parsed.refactored_code || '';
+          fix = parsed.fix || '';
+          citedFiles = Array.isArray(parsed.cited_files) ? parsed.cited_files : [];
+        } catch {
+          replyText = response;
+        }
+      }
+
       const aiMsg = {
         sender: 'ai',
-        content: response.reply,
+        content: replyText,
         metadata: {
-          fix: response.fix,
-          improved_code: response.improved_code,
-          cited_files: response.cited_files,
+          fix,
+          improved_code: improvedCode,
+          cited_files: citedFiles,
         },
         timestamp: Date.now(),
       };

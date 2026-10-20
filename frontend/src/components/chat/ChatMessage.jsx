@@ -78,6 +78,37 @@ export function CodeFixCard({ title = 'Suggested Code Fix', code = '' }) {
 export function ChatMessage({ message }) {
   const isUser = message.sender === 'user';
 
+  let displayContent = message.content;
+  let improvedCode = message.metadata?.improved_code;
+  let fix = message.metadata?.fix;
+  let citedFiles = message.metadata?.cited_files;
+
+  // If content is an unparsed JSON string containing { reply, improved_code }, unpack it cleanly
+  if (typeof displayContent === 'string' && displayContent.trim().startsWith('{') && displayContent.trim().endsWith('}')) {
+    try {
+      const parsed = JSON.parse(displayContent);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.reply) displayContent = parsed.reply;
+        if (!improvedCode && (parsed.improved_code || parsed.refactored_code)) {
+          improvedCode = parsed.improved_code || parsed.refactored_code;
+        }
+        if (!fix && parsed.fix) fix = parsed.fix;
+        if (!citedFiles && Array.isArray(parsed.cited_files)) citedFiles = parsed.cited_files;
+      }
+    } catch {
+      // Keep as regular string
+    }
+  } else if (typeof displayContent === 'object' && displayContent !== null) {
+    if (displayContent.reply) {
+      improvedCode = improvedCode || displayContent.improved_code || displayContent.refactored_code;
+      fix = fix || displayContent.fix;
+      citedFiles = citedFiles || displayContent.cited_files;
+      displayContent = typeof displayContent.reply === 'string' ? displayContent.reply : JSON.stringify(displayContent.reply, null, 2);
+    } else {
+      displayContent = JSON.stringify(displayContent, null, 2);
+    }
+  }
+
   return (
     <div
       style={{
@@ -120,12 +151,12 @@ export function ChatMessage({ message }) {
           boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <p style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p>
+        <p style={{ whiteSpace: 'pre-wrap' }}>{displayContent}</p>
 
-        {Array.isArray(message.metadata?.cited_files) && message.metadata.cited_files.length > 0 && (
+        {Array.isArray(citedFiles) && citedFiles.length > 0 && (
           <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600 }}>Citations:</span>
-            {message.metadata.cited_files.map((file, idx) => (
+            {citedFiles.map((file, idx) => (
               <span
                 key={idx}
                 style={{
@@ -144,9 +175,9 @@ export function ChatMessage({ message }) {
           </div>
         )}
 
-        {message.metadata?.fix && <CodeFixCard title="Suggested Code Fix" code={message.metadata.fix} />}
-        {message.metadata?.improved_code && (
-          <CodeFixCard title="Improved Code Block" code={message.metadata.improved_code} />
+        {fix && <CodeFixCard title="Suggested Code Fix" code={fix} />}
+        {improvedCode && (
+          <CodeFixCard title="Improved Code Block" code={improvedCode} />
         )}
       </div>
     </div>

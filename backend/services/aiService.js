@@ -130,20 +130,50 @@ async function createGroqCompletion(messages, retries = 2) {
   throw lastError;
 }
 
-async function chatWithAI(message, code, language, options = {}) {
-  const { mode = 'developer', scope = 'current_file', index = null, selectedFiles = [], currentFilePath = '' } = options;
+async function chatWithAI(paramsOrMessage, codeArg, languageArg, optionsArg = {}) {
+  let message, code, language, history, mode, scope, repoContext, currentFilePath, selectedFiles, index;
+
+  if (typeof paramsOrMessage === 'object' && paramsOrMessage !== null) {
+    message = paramsOrMessage.message || '';
+    code = paramsOrMessage.code || paramsOrMessage.context || '';
+    language = paramsOrMessage.language || 'javascript';
+    history = paramsOrMessage.history || [];
+    mode = paramsOrMessage.mode || 'general';
+    scope = paramsOrMessage.scope || 'file';
+    repoContext = paramsOrMessage.repoContext || null;
+    currentFilePath = paramsOrMessage.currentFilePath || '';
+    selectedFiles = paramsOrMessage.selectedFiles || [];
+    index = paramsOrMessage.index || null;
+  } else {
+    message = paramsOrMessage || '';
+    code = codeArg || '';
+    language = languageArg || 'javascript';
+    history = optionsArg.history || [];
+    mode = optionsArg.mode || 'developer';
+    scope = optionsArg.scope || 'current_file';
+    repoContext = optionsArg.repoContext || null;
+    currentFilePath = optionsArg.currentFilePath || '';
+    selectedFiles = optionsArg.selectedFiles || [];
+    index = optionsArg.index || null;
+  }
 
   let contextInfo;
-  if (code && !options.contextText) {
+  if (repoContext) {
+    const repoText = typeof repoContext === 'string' ? repoContext : JSON.stringify(repoContext, null, 2);
+    contextInfo = {
+      contextText: repoText,
+      citedFiles: Array.isArray(repoContext.files) ? repoContext.files : [],
+    };
+  } else if (code && !optionsArg?.contextText) {
     contextInfo = buildContext({
       scope: 'current_file',
       currentFile: { path: currentFilePath || 'file.js', content: code },
       userQuery: message,
     });
-  } else if (index || selectedFiles.length > 0) {
+  } else if (index || (selectedFiles && selectedFiles.length > 0)) {
     contextInfo = buildContext({
       scope: index ? 'indexed_repo' : 'selected_files',
-      selectedFiles,
+      selectedFiles: selectedFiles || [],
       index,
       userQuery: message,
     });
@@ -158,15 +188,33 @@ async function chatWithAI(message, code, language, options = {}) {
     citedFiles: contextInfo.citedFiles,
   });
 
+  const historyMessages = Array.isArray(history)
+    ? history
+        .filter((h) => h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string')
+        .slice(-10)
+        .map((h) => ({ role: h.role, content: h.content }))
+    : [];
+
   try {
     const response = await createGroqCompletion([
       { role: "system", content: systemPrompt },
+      ...historyMessages,
       { role: "user", content: userPrompt }
     ]);
 
-    const content = response.choices[0].message.content;
-    const parsed = await safeJsonParse(content, { reply: "AI service error", cited_files: [], fix: "", improved_code: "" });
-    return sanitizeChatResponse(parsed, { reply: "AI service error", cited_files: contextInfo.citedFiles, fix: "", improved_code: "" });
+    const content = response.choices?.[0]?.message?.content || "";
+    const parsed = await safeJsonParse(content, {
+      reply: content || "I have analyzed your query.",
+      cited_files: contextInfo.citedFiles || [],
+      fix: "",
+      improved_code: ""
+    });
+    return sanitizeChatResponse(parsed, {
+      reply: content || "I have analyzed your query.",
+      cited_files: contextInfo.citedFiles || [],
+      fix: "",
+      improved_code: ""
+    });
   } catch (error) {
     logGroqError(error);
     if (error.status === 401) {
